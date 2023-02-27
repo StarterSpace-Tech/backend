@@ -8,5 +8,8 @@ edition = "2021"
 [dependencies]
 actix-web = "4"
 serde = { version = "1.0", features = ["derive"] }
-sqlx = { version = "0.6.2", features = ["runtime-actix-rustls", "mysql", "macros"] }
+serde_json = "1.0.93"
+sqlx = { version = "0.6.2", features = ["runtime-actix-rustls", "mysql", "macros", "time"] }
 sqlite = "0.30.4"
+env_logger = "0.10.0"
+derive_more = "0.99.17"

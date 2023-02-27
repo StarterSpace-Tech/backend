@@ -1,65 +1,87 @@
-use actix_web::{Result, get, post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{http, error, Result, get, post, web, App, HttpResponse, HttpServer, Responder};
+use sqlx::{mysql::*, ConnectOptions};
 use star_tec_backend::*;
+use derive_more::{Display, Error};
 
+#[get("/teams")]
+async fn teams(db: web::Data<AppState>) -> impl Responder {
+    let raw_teams = sqlx::query_as::<sqlx::mysql::MySql, RawTeam>("SELECT * FROM teams")
+        .fetch_all(&db.pool)
+        .await
+        .unwrap();
 
-
-#[get("/startups")]
-async fn hello() -> Result<impl Responder> {
-
-    let mut vec_obj:Vec<Team> = vec![];
-    for i in 1..30 {
-        let mut team = Team::new();
-        team.rank = i;
-        team.id = format!("0x{:0>4}", i);
-        vec_obj.push(team);
+    let mut teams:Vec<Team> = vec![];
+    for raw_team in raw_teams {
+        let team =  Team::from(&raw_team, &db.pool).await;
+        teams.push(team);
     }
-    Ok(web::Json(vec_obj))
+
+    ( HttpResponse::Ok().json(teams), http::StatusCode::ACCEPTED )
 }
 
-#[get("/echo")]
-async fn echo(bytes: web::Bytes) -> Result<String, actix_web::error::JsonPayloadError> {
-    match String::from_utf8(bytes.to_vec()) {
-        Ok(text) => Ok(format!("Hello, {}!\n", text)),
-        Err(_) => Err(actix_web::error::JsonPayloadError::ContentType)
-    }
+#[get("/team/{id}")]
+async fn team_id(db: web::Data<AppState>, key: web::Path<String>) -> impl Responder {
+    let raw_team = sqlx::query_as::<sqlx::mysql::MySql, RawTeam>(&format!("SELECT * FROM teams WHERE `id`={}", key.into_inner()))
+        .fetch_one(&db.pool)
+        .await;
+    if let Ok(raw_team) = &raw_team {
+        let team =  Team::from(&raw_team, &db.pool).await;
+        println!("{:?}", team);
+        return ( HttpResponse::Ok().json(team), http::StatusCode::ACCEPTED )
+    };
+    ( HttpResponse::Ok().json("ID does not exist"), http::StatusCode::NOT_FOUND )
 }
 
-#[get("/startup/{id}")]
-async fn pipe(id: web::Path<String>) -> Result<impl Responder> {
-    let mut team = Team::new();
-    team.id = id.into_inner();
-    Ok(web::Json(team))
-}
-
-#[get("/objectives")]
-async fn obj() -> Result<impl Responder> {
-    let mut badges:Vec<Badge> = vec![];
-    for i in 1..30 {
-        let mut  b = Badge::new();
-        if i > 15 {
-            b.category = BadgeCategory::Advanced;
-        }
-        b.id = format!("0x{:0>4}", i);
-        badges.push(b);
-    }
-    Ok(web::Json(badges))
-}
-
-async fn manual_hello() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
+#[get("/create/team")]
+async fn team_create(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder {
+    let raw_team = String::from_utf8(bytes.to_vec()).unwrap();
+    let raw_team:CreateTeam = serde_json::from_str(&raw_team).unwrap();
+    let raw_team = RawTeam::from(raw_team);
+    sqlx::query!(
+        r#"INSERT INTO teams (`score`, `stage`, `name`, `description`, `creation_date`, `location`) VALUES (?, ?, ?, ?, ?, ?)"#,
+        raw_team.score,
+        raw_team.stage,
+        &raw_team.name,
+        &raw_team.description,
+        raw_team.creation_date.to_string(),
+        &raw_team.location,
+    )
+    .execute(&db.pool)
+    .await;
+    HttpResponse::Ok()
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| {
+    // Get host and port where application will run on
+    let host:String = std::env::var("HOST").expect("No HOST found in enviroment variables");
+    let port:u16 = std::env::var("PORT").expect("No PORT found in enviroment variables").parse().expect("PORT is not a number");
+
+    // Check if auth key exists
+    // let _auth_key: String = std::env::var("AUTH_KEY").expect("No AUTH_KEY has been set");
+
+    // Connect to database
+    let database_url = std::env::var("DATABASE_URL").unwrap();
+    let pool = MySqlPool::connect(&database_url).await.expect("Unable to connect to database");
+
+    // Set debugger
+    std::env::set_var("RUST_LOG", "actix_web=debug");
+    env_logger::init();
+
+    let app_state = AppState { pool };
+    HttpServer::new(move || {
         App::new()
-            .service(hello)
-            .service(pipe)
-            .service(obj)
-            .service(echo)
-            .route("/hey", web::get().to(manual_hello))
+            .app_data(web::Data::new(app_state.clone()))
+            .service(teams)
+            .service(team_id)
+            .service(team_create)
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind((host, port))?
     .run()
     .await
+}
+
+#[derive(Clone)]
+struct AppState {
+    pool: sqlx::mysql::MySqlPool,
 }
