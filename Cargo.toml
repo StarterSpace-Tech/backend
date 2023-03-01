@@ -13,3 +13,4 @@ sqlx = { version = "0.6.2", features = ["runtime-actix-rustls", "mysql", "macros
 sqlite = "0.30.4"
 env_logger = "0.10.0"
 derive_more = "0.99.17"
+chrono = "0.4.23"

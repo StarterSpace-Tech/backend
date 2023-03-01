@@ -1,17 +1,24 @@
-use serde::{Serialize, Deserialize};
 use sqlx::mysql::MySqlRow;
 use sqlx::Row;
 use sqlx::FromRow;
+use serde::{Serialize, Deserialize};
+use chrono::{NaiveDate, NaiveDateTime, Utc};
+use actix_web::cookie::time::Date;
+
+#[derive(FromRow, Debug)]
+pub struct RawID {
+    pub id: u64,
+}
 
 #[derive(Serialize, Debug)]
 pub struct Team {
     id: u64,
-    rank: u32,
+    rank: Option<u32>,
     score: u64,
     stage: u32,
     name: String,
-    logo_url: String,
-    banner_url: String,
+    logo_url: Option<String>,
+    banner_url: Option<String>,
     description: String,
     creation_date: String,
     location: String,
@@ -36,16 +43,17 @@ pub struct RawTeam {
 
 impl RawTeam {
     pub fn from(create_team: CreateTeam) -> RawTeam {
+        let format = actix_web::cookie::time::format_description::parse("[year]-[month]-[day]").unwrap();
         RawTeam {
             id: 0,
             rank: None,
             score: 0,
             stage: 1,
             name: create_team.name,
-            logo_url: Some(String::from("https://www.pngitem.com/pimgs/m/150-1503945_transparent-user-png-default-user-image-png-png.png")),
-            banner_url: Some(String::from("https://thumbs.dreamstime.com/b/user-profile-icon-crystal-blue-banner-background-isolated-169986843.jpg")),
+            logo_url: None,
+            banner_url: None,
             description: create_team.description,
-            creation_date: actix_web::cookie::time::Date::from_calendar_date(2020, actix_web::cookie::time::Month::January, 1).unwrap(),
+            creation_date: actix_web::cookie::time::Date::parse(&create_team.creation_date, &format).unwrap(),
             location: create_team.location,
         }
     }
@@ -56,18 +64,19 @@ pub struct CreateTeam {
     name: String,
     description: String,
     location: String,
+    creation_date: String,
 }
 
 impl Team {
     pub fn new() -> Team {
         Team {
             id: 0,
-            rank: 0,
+            rank: None,
             score: 0,
             stage: 0,
             name: String::new(),
-            logo_url: String::from("https://www.pngitem.com/pimgs/m/150-1503945_transparent-user-png-default-user-image-png-png.png"),
-            banner_url: String::from("https://thumbs.dreamstime.com/b/user-profile-icon-crystal-blue-banner-background-isolated-169986843.jpg"),
+            logo_url: None,
+            banner_url: None,
             description: String::new(),
             creation_date: String::new(),
             location: String::new(),
@@ -76,24 +85,22 @@ impl Team {
             badges: vec![],
         }
     }
-    pub async fn from(row: &RawTeam, pool: &sqlx::mysql::MySqlPool) -> Team {
+    pub async fn from(raw_team: &RawTeam, pool: &sqlx::mysql::MySqlPool) -> Team {
         let mut team = Team::new();
-        team.id = row.id;
-        if let Some(rank) = row.rank {
-            team.rank = rank;
+        team.id = raw_team.id;
+        team.rank = raw_team.rank;
+        team.score = raw_team.score;
+        team.stage = raw_team.stage;
+        team.name = String::from(&raw_team.name);
+        if let Some(logo_url) = &raw_team.logo_url {
+            team.logo_url = Some(String::from(logo_url));
         }
-        team.score = row.score;
-        team.stage = row.stage;
-        team.name = String::from(&row.name);
-        if let Some(logo_url) = &row.logo_url {
-            team.logo_url = String::from(logo_url);
+        if let Some(banner_url) = &raw_team.banner_url {
+            team.banner_url = Some(String::from(banner_url));
         }
-        if let Some(banner_url) = &row.banner_url {
-            team.banner_url = String::from(banner_url);
-        }
-        team.description = String::from(&row.description);
-        team.creation_date = row.creation_date.to_string();
-        team.location = String::from(&row.location);
+        team.description = String::from(&raw_team.description);
+        team.creation_date = raw_team.creation_date.to_string();
+        team.location = String::from(&raw_team.location);
         team.load_labels(&pool).await;
         team.load_badges(&pool).await;
         team.load_persons(&pool).await;
@@ -120,8 +127,8 @@ impl Team {
             .unwrap();
         if badge_ownerships.is_empty()  { return };
         let mut badges:Vec<OwnedBadge> = vec![];
-        for b in badge_ownerships {
-            let raw_badge = sqlx::query_as::<sqlx::mysql::MySql, RawBadge>(&format!("SELECT * FROM badges WHERE `id`={}", b.badge_id))
+        for badge_ownership in badge_ownerships {
+            let raw_badge = sqlx::query_as::<sqlx::mysql::MySql, RawBadge>(&format!("SELECT * FROM badges WHERE `id`={}", badge_ownership.badge_id))
                 .fetch_one(pool)
                 .await
                 .unwrap();
@@ -129,13 +136,13 @@ impl Team {
                 .fetch_one(pool)
                 .await
                 .unwrap();
-            let owned_badge = OwnedBadge::from(raw_badge, category, &b);
+            let owned_badge = OwnedBadge::from(raw_badge, category, &badge_ownership);
             badges.push(owned_badge);
         }
         self.badges = badges;
     }
     pub async fn load_persons(&mut self, pool: &sqlx::mysql::MySqlPool) {
-        let raw_persons = sqlx::query_as::<sqlx::mysql::MySql, RawPerson>(&format!("SELECT * FROM persons WHERE `team`={}", self.id)[..])
+        let raw_persons = sqlx::query_as::<sqlx::mysql::MySql, RawPerson>(&format!("SELECT * FROM persons WHERE `team_id`={}", self.id)[..])
             .fetch_all(pool)
             .await
             .unwrap();
@@ -147,38 +154,46 @@ impl Team {
 #[derive(Serialize, Debug)]
 struct Person {
     id: u64,
-    team: u64,
+    team_id: u64,
     name: String,
     career: String,
     graduation_date: String,
-    picture_url: String,
-    portafolio_url: String,
+    picture_url: Option<String>,
+    portafolio_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CreatePerson {
+    pub team_id: u64,
+    pub name: String,
+    pub career: String,
+    pub graduation_date: String,
 }
 
 impl Person {
     pub fn new() -> Person {
         Person {
             id: 0,
-            team: 0,
+            team_id: 0,
             name: String::new(),
             career: String::new(),
             graduation_date: String::new(),
-            picture_url: String::from("Error"),
-            portafolio_url: String::from("Error"),
+            picture_url: None,
+            portafolio_url: None,
         }
     }
     pub fn from(raw_person: &RawPerson) -> Person {
         let mut person = Person::new();
         person.id = raw_person.id;
-        person.team = raw_person.team;
+        person.team_id = raw_person.team_id;
         person.name = raw_person.name.clone();
         person.career = raw_person.career.clone();
         person.graduation_date = raw_person.graduation_date.to_string();
         if let Some(picture_url) = &raw_person.picture_url {
-            person.picture_url = String::from(picture_url);
+            person.picture_url = Some(String::from(picture_url));
         }
         if let Some(portafolio_url) = &raw_person.portafolio_url {
-            person.portafolio_url = String::from(portafolio_url);
+            person.portafolio_url = Some(String::from(portafolio_url));
         }
         person
     }
@@ -187,7 +202,7 @@ impl Person {
 #[derive(FromRow, Debug)]
 struct RawPerson {
     pub id: u64,
-    pub team: u64,
+    pub team_id: u64,
     pub name: String,
     pub career: String,
     pub graduation_date: actix_web::cookie::time::Date,
@@ -195,10 +210,23 @@ struct RawPerson {
     pub portafolio_url: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CreateCategory {
+    pub name: String,
+}
+
 #[derive(FromRow, Serialize, Debug)]
-struct Category {
-    id: u64,
-    name: String,
+pub struct Category {
+    pub id: u64,
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CreateBadge {
+    pub name: String,
+    pub description: String,
+    pub points: i64,
+    pub category: u64,
 }
 
 #[derive(Serialize, Debug)]
@@ -222,13 +250,20 @@ impl Badge {
     }
 }
 
-#[derive(FromRow, Debug)]
-struct RawBadge {
-    id: u64,
-    name: String,
-    description: String,
-    points: i64,
-    category: u64,
+#[derive(FromRow, Debug, Serialize)]
+pub struct RawBadge {
+    pub id: u64,
+    pub name: String,
+    pub description: String,
+    pub points: i64,
+    pub category: u64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CreateBadgeOwnership {
+    pub team_id: u64,
+    pub badge_id: u64,
+    pub acquisition_date: String,
 }
 
 #[derive(FromRow, Debug)]
@@ -257,6 +292,12 @@ impl OwnedBadge {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CreateLabelOwnership {
+    pub team_id: u64,
+    pub label_id: u64,
+}
+
 #[derive(FromRow, Debug)]
 pub struct LabelOwnership {
     pub id: u64,
@@ -264,8 +305,13 @@ pub struct LabelOwnership {
     pub label_id: u64,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CreateLabel {
+    pub name: String,
+}
+
 #[derive(FromRow, Serialize, Debug)]
-struct Label {
-    id: u64,
-    name: String,
+pub struct Label {
+    pub id: u64,
+    pub name: String,
 }

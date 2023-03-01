@@ -46,7 +46,7 @@ CREATE TABLE `teams`(
 --     `teams` ADD UNIQUE `teams_name_unique`(`name`);
 CREATE TABLE `persons`(
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    `team` BIGINT UNSIGNED NOT NULL,
+    `team_id` BIGINT UNSIGNED NOT NULL,
     `name` VARCHAR(255) NOT NULL,
     `career` VARCHAR(255) NOT NULL,
     `graduation_date` DATE NOT NULL,
@@ -73,7 +73,7 @@ ALTER TABLE
 ALTER TABLE
     `badge_ownerships` ADD CONSTRAINT `badge_ownerships_team_id_foreign` FOREIGN KEY(`team_id`) REFERENCES `teams`(`id`);
 ALTER TABLE
-    `persons` ADD CONSTRAINT `persons_team_foreign` FOREIGN KEY(`team`) REFERENCES `teams`(`id`);
+    `persons` ADD CONSTRAINT `persons_team_foreign` FOREIGN KEY(`team_id`) REFERENCES `teams`(`id`);
 ALTER TABLE
     `badge_ownerships` ADD CONSTRAINT `badge_ownerships_badge_id_foreign` FOREIGN KEY(`badge_id`) REFERENCES `badges`(`id`);
 ALTER TABLE

@@ -19,6 +19,37 @@ async fn teams(db: web::Data<AppState>) -> impl Responder {
     ( HttpResponse::Ok().json(teams), http::StatusCode::ACCEPTED )
 }
 
+#[get("/labels")]
+async fn labels(db: web::Data<AppState>) -> impl Responder {
+    let labels = sqlx::query_as::<sqlx::mysql::MySql, Label>("SELECT * FROM labels")
+        .fetch_all(&db.pool)
+        .await
+        .unwrap();
+
+    ( HttpResponse::Ok().json(labels), http::StatusCode::ACCEPTED )
+}
+
+#[get("/badges")]
+async fn badges(db: web::Data<AppState>) -> impl Responder {
+    let badges = sqlx::query_as::<sqlx::mysql::MySql, RawBadge>("SELECT * FROM badges")
+        .fetch_all(&db.pool)
+        .await
+        .unwrap();
+
+    ( HttpResponse::Ok().json(badges), http::StatusCode::ACCEPTED )
+}
+
+#[get("/categories")]
+async fn categories(db: web::Data<AppState>) -> impl Responder {
+    let categories = sqlx::query_as::<sqlx::mysql::MySql, Category>("SELECT * FROM badge_categories")
+        .fetch_all(&db.pool)
+        .await
+        .unwrap();
+
+    ( HttpResponse::Ok().json(categories), http::StatusCode::ACCEPTED )
+}
+
+
 #[get("/team/{id}")]
 async fn team_id(db: web::Data<AppState>, key: web::Path<String>) -> impl Responder {
     let raw_team = sqlx::query_as::<sqlx::mysql::MySql, RawTeam>(&format!("SELECT * FROM teams WHERE `id`={}", key.into_inner()))
@@ -26,29 +57,130 @@ async fn team_id(db: web::Data<AppState>, key: web::Path<String>) -> impl Respon
         .await;
     if let Ok(raw_team) = &raw_team {
         let team =  Team::from(&raw_team, &db.pool).await;
-        println!("{:?}", team);
         return ( HttpResponse::Ok().json(team), http::StatusCode::ACCEPTED )
     };
     ( HttpResponse::Ok().json("ID does not exist"), http::StatusCode::NOT_FOUND )
 }
 
-#[get("/create/team")]
+#[post("/create/team")]
 async fn team_create(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder {
+    let mut conn = db.pool.clone().acquire().await.unwrap();
     let raw_team = String::from_utf8(bytes.to_vec()).unwrap();
     let raw_team:CreateTeam = serde_json::from_str(&raw_team).unwrap();
     let raw_team = RawTeam::from(raw_team);
-    sqlx::query!(
-        r#"INSERT INTO teams (`score`, `stage`, `name`, `description`, `creation_date`, `location`) VALUES (?, ?, ?, ?, ?, ?)"#,
-        raw_team.score,
-        raw_team.stage,
-        &raw_team.name,
-        &raw_team.description,
-        raw_team.creation_date.to_string(),
-        &raw_team.location,
-    )
+
+    sqlx::query("INSERT INTO teams (`score`, `stage`, `name`, `description`, `creation_date`, `location`) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(raw_team.score)
+    .bind(raw_team.stage)
+    .bind(&raw_team.name)
+    .bind(&raw_team.description)
+    .bind(raw_team.creation_date.to_string())
+    .bind(&raw_team.location)
+    .execute(&mut conn)
+    .await
+    .unwrap();
+
+    let raw_id = sqlx::query_as::<sqlx::mysql::MySql, RawID>(&format!("SELECT `id` FROM teams WHERE `name`='{}'", &raw_team.name))
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+
+    HttpResponse::SeeOther()
+    .header(http::header::LOCATION, format!("/team/{}", raw_id.id))
+    .finish()
+}
+
+#[post("/add/label")]
+async fn add_label(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder {
+    let label_ownership = String::from_utf8(bytes.to_vec()).unwrap();
+    let label_ownership:CreateLabelOwnership = serde_json::from_str(&label_ownership).unwrap();
+
+    sqlx::query("INSERT INTO label_ownerships (`team_id`, `label_id`) VALUES (?, ?)")
+    .bind(label_ownership.team_id)
+    .bind(label_ownership.label_id)
     .execute(&db.pool)
-    .await;
-    HttpResponse::Ok()
+    .await
+    .unwrap();
+
+    ( HttpResponse::Ok(), http::StatusCode::ACCEPTED )
+}
+
+#[post("/add/badge")]
+async fn add_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder {
+    let badge_ownership = String::from_utf8(bytes.to_vec()).unwrap();
+    let badge_ownership:CreateBadgeOwnership = serde_json::from_str(&badge_ownership).unwrap();
+
+    sqlx::query("INSERT INTO badge_ownerships (`team_id`, `badge_id`, `acquisition_date`) VALUES (?, ?, ?)")
+    .bind(badge_ownership.team_id)
+    .bind(badge_ownership.badge_id)
+    .bind(badge_ownership.acquisition_date.to_string())
+    .execute(&db.pool)
+    .await
+    .unwrap();
+
+    ( HttpResponse::Ok(), http::StatusCode::ACCEPTED )
+}
+
+#[post("/add/person")]
+async fn add_person(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder {
+    let person = String::from_utf8(bytes.to_vec()).unwrap();
+    let person:CreatePerson = serde_json::from_str(&person).unwrap();
+
+    sqlx::query("INSERT INTO persons (`team_id`, `name`, `career`, `graduation_date`) VALUES (?, ?, ?, ?)")
+    .bind(person.team_id)
+    .bind(&person.name)
+    .bind(&person.career)
+    .bind(&person.graduation_date)
+    .execute(&db.pool)
+    .await
+    .unwrap();
+
+    ( HttpResponse::Ok(), http::StatusCode::ACCEPTED )
+}
+
+#[post("/create/badge")]
+async fn create_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder {
+    let badge = String::from_utf8(bytes.to_vec()).unwrap();
+    let badge:CreateBadge = serde_json::from_str(&badge).unwrap();
+
+    sqlx::query("INSERT INTO badges (`name`, `description`, `points`, `category`) VALUES (?, ?, ?, ?)")
+    .bind(&badge.name)
+    .bind(&badge.description)
+    .bind(badge.points)
+    .bind(badge.category)
+    .execute(&db.pool)
+    .await
+    .unwrap();
+
+    ( HttpResponse::Ok(), http::StatusCode::ACCEPTED )
+}
+
+#[post("/create/label")]
+async fn create_label(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder {
+    let label = String::from_utf8(bytes.to_vec()).unwrap();
+    let label:CreateLabel = serde_json::from_str(&label).unwrap();
+
+    sqlx::query("INSERT INTO labels (`name`) VALUES (?)")
+    .bind(&label.name)
+    .execute(&db.pool)
+    .await
+    .unwrap();
+
+    ( HttpResponse::Ok(), http::StatusCode::ACCEPTED )
+}
+
+#[post("/create/category")]
+async fn create_category(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder {
+    let category = String::from_utf8(bytes.to_vec()).unwrap();
+    let category:CreateCategory = serde_json::from_str(&category).unwrap();
+
+    sqlx::query("INSERT INTO badge_categories (`name`) VALUES (?)")
+    .bind(&category.name)
+    .execute(&db.pool)
+    .await
+    .unwrap();
+
+    ( HttpResponse::Ok(), http::StatusCode::ACCEPTED )
 }
 
 #[actix_web::main]
@@ -73,8 +205,17 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(web::Data::new(app_state.clone()))
             .service(teams)
+            .service(labels)
+            .service(badges)
+            .service(categories)
             .service(team_id)
             .service(team_create)
+            .service(add_label)
+            .service(add_badge)
+            .service(add_person)
+            .service(create_badge)
+            .service(create_label)
+            .service(create_category)
     })
     .bind((host, port))?
     .run()
