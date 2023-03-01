@@ -1,8 +1,18 @@
-# Start from a small, Alpine-based image
-FROM alpine:3.14
+# Use a Rust latest image as the base
+FROM rust:latest
 
-# Copy the compiled executable into the container
-COPY target/release/star-tec-backend /usr/local/bin/star-tec-backend
+# Set the working directory
+WORKDIR /start-tec-backend
 
-# Set the default command to run the executable
-CMD ["/usr/local/bin/star-tec-backend"]
+# Copy the app's source code to the container
+COPY . .
+
+# Install any required dependencies
+RUN apt-get update && apt-get install -y libssl-dev && \
+    cargo install --path .
+
+# Build the app
+RUN cargo build --release
+
+# Set the entry point
+CMD cargo run --release
