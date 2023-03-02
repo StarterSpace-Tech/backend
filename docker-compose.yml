@@ -1,7 +1,0 @@
-version: '3.8'
-services:
-  app:
-    image: alonso284/star-tec-backend:latest
-    ports:
-      - 8080:8080
-
