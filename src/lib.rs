@@ -1,21 +1,23 @@
-use sqlx::mysql::MySqlRow;
+use sqlx::postgres::PgRow;
 use sqlx::Row;
 use sqlx::FromRow;
 use serde::{Serialize, Deserialize};
 use chrono::{NaiveDate, NaiveDateTime, Utc};
 use actix_web::cookie::time::Date;
+use futures::join;
+use sqlx::{Pool, Postgres, query_as};
 
 #[derive(FromRow, Debug)]
 pub struct RawID {
-    pub id: u64,
+    pub id: i64,
 }
 
 #[derive(Serialize, Debug)]
 pub struct Team {
-    id: u64,
-    rank: Option<u32>,
-    score: u64,
-    stage: u32,
+    id: i64,
+    rank: Option<i32>,
+    score: i64,
+    stage: i32,
     name: String,
     logo_url: Option<String>,
     banner_url: Option<String>,
@@ -29,10 +31,10 @@ pub struct Team {
 
 #[derive(FromRow, Debug)]
 pub struct RawTeam {
-    pub id: u64,
-    pub rank: Option<u32>,
-    pub score: u64,
-    pub stage: u32,
+    pub id: i64,
+    pub rank: Option<i32>,
+    pub score: i64,
+    pub stage: i32,
     pub name: String,
     pub logo_url: Option<String>,
     pub banner_url: Option<String>,
@@ -85,7 +87,7 @@ impl Team {
             badges: vec![],
         }
     }
-    pub async fn from(raw_team: &RawTeam, pool: &sqlx::mysql::MySqlPool) -> Team {
+    pub async fn from(raw_team: RawTeam, pool: &sqlx::postgres::PgPool) -> Team {
         let mut team = Team::new();
         team.id = raw_team.id;
         team.rank = raw_team.rank;
@@ -101,60 +103,71 @@ impl Team {
         team.description = String::from(&raw_team.description);
         team.creation_date = raw_team.creation_date.to_string();
         team.location = String::from(&raw_team.location);
-        team.load_labels(&pool).await;
-        team.load_badges(&pool).await;
-        team.load_persons(&pool).await;
+
+        let labels = team.load_labels(pool.clone());
+        let badges = team.load_badges(pool.clone());
+        let persons = team.load_persons(pool.clone());
+        let (labels, badges, persons) = join!(labels, badges, persons);
+        team.labels = labels;
+        team.badges = badges;
+        team.persons = persons;
         team
     }
-    pub async fn load_labels(&mut self, pool: &sqlx::mysql::MySqlPool) {
-        let label_ownerships = sqlx::query_as::<sqlx::mysql::MySql, LabelOwnership>(&format!("SELECT * FROM label_ownerships WHERE `team_id`={}", self.id)[..])
-            .fetch_all(pool)
+    pub async fn load_labels(&self, pool: sqlx::postgres::PgPool) -> Vec<Label> {
+        println!("labels");
+        let team_id:i32 = self.id as i32;
+        let label_ownerships = sqlx::query_as!(LabelOwnership, "SELECT * FROM label_ownerships WHERE team_id = $1 ", 1i64)
+            .fetch_all(&pool)
             .await
             .unwrap();
-        if label_ownerships.is_empty()  { return };
-        let label_id_values:Vec<String> = label_ownerships.iter().map(|l| l.label_id.to_string()).collect();
-        let label_id_values = label_id_values.join(", ");
-        let labels = sqlx::query_as::<sqlx::mysql::MySql, Label>(&format!("SELECT * FROM labels WHERE `id` IN ({})", label_id_values))
-            .fetch_all(pool)
+        if label_ownerships.is_empty()  { return vec![] };
+        let label_id_values:Vec<i64> = label_ownerships.iter().map(|l| l.label_id).collect();
+        let labels = sqlx::query_as!(Label, "SELECT * FROM labels WHERE id = ANY($1)", &label_id_values[..])
+            .fetch_all(&pool)
             .await
             .unwrap();
-        self.labels = labels
+        println!("labels");
+        labels
     }
-    pub async fn load_badges(&mut self, pool: &sqlx::mysql::MySqlPool) {
-        let badge_ownerships = sqlx::query_as::<sqlx::mysql::MySql, BadgeOwnership>(&format!("SELECT * FROM badge_ownerships WHERE `team_id`={}", self.id)[..])
-            .fetch_all(pool)
+    pub async fn load_badges(&self, pool: sqlx::postgres::PgPool) -> Vec<OwnedBadge> {
+        println!("badges");
+        let badge_ownerships = sqlx::query_as!(BadgeOwnership, "SELECT * FROM badge_ownerships WHERE team_id = $1", self.id)
+            .fetch_all(&pool)
             .await
             .unwrap();
-        if badge_ownerships.is_empty()  { return };
+        if badge_ownerships.is_empty()  { return vec![] };
         let mut badges:Vec<OwnedBadge> = vec![];
         for badge_ownership in badge_ownerships {
-            let raw_badge = sqlx::query_as::<sqlx::mysql::MySql, RawBadge>(&format!("SELECT * FROM badges WHERE `id`={}", badge_ownership.badge_id))
-                .fetch_one(pool)
+            let raw_badge = sqlx::query_as!(RawBadge, "SELECT * FROM badges WHERE id = $1", badge_ownership.badge_id)
+                .fetch_one(&pool)
                 .await
                 .unwrap();
-            let category = sqlx::query_as::<sqlx::mysql::MySql, Category>(&format!("SELECT * FROM badge_categories WHERE `id`={}", raw_badge.category))
-                .fetch_one(pool)
+            let category = sqlx::query_as!(Category, "SELECT * FROM badge_categories WHERE id = $1", raw_badge.category)
+                .fetch_one(&pool)
                 .await
                 .unwrap();
             let owned_badge = OwnedBadge::from(raw_badge, category, &badge_ownership);
             badges.push(owned_badge);
         }
-        self.badges = badges;
+        println!("badges");
+        badges
     }
-    pub async fn load_persons(&mut self, pool: &sqlx::mysql::MySqlPool) {
-        let raw_persons = sqlx::query_as::<sqlx::mysql::MySql, RawPerson>(&format!("SELECT * FROM persons WHERE `team_id`={}", self.id)[..])
-            .fetch_all(pool)
+    pub async fn load_persons(& self, pool: sqlx::postgres::PgPool) -> Vec<Person> {
+        println!("persons");
+        let raw_persons = sqlx::query_as!(RawPerson, "SELECT * FROM persons WHERE team_id = $1", self.id)
+            .fetch_all(&pool)
             .await
             .unwrap();
         let persons:Vec<Person> = raw_persons.iter().map(|p| Person::from(&p)).collect();
-        self.persons = persons;
+        println!("persons");
+        persons
     }
 }
 
 #[derive(Serialize, Debug)]
-struct Person {
-    id: u64,
-    team_id: u64,
+pub struct Person {
+    id: i64,
+    team_id: i64,
     name: String,
     career: String,
     graduation_date: String,
@@ -164,7 +177,7 @@ struct Person {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CreatePerson {
-    pub team_id: u64,
+    pub team_id: i64,
     pub name: String,
     pub career: String,
     pub graduation_date: String,
@@ -200,9 +213,9 @@ impl Person {
 }
 
 #[derive(FromRow, Debug)]
-struct RawPerson {
-    pub id: u64,
-    pub team_id: u64,
+pub struct RawPerson {
+    pub id: i64,
+    pub team_id: i64,
     pub name: String,
     pub career: String,
     pub graduation_date: actix_web::cookie::time::Date,
@@ -217,7 +230,7 @@ pub struct CreateCategory {
 
 #[derive(FromRow, Serialize, Debug)]
 pub struct Category {
-    pub id: u64,
+    pub id: i64,
     pub name: String,
 }
 
@@ -226,12 +239,12 @@ pub struct CreateBadge {
     pub name: String,
     pub description: String,
     pub points: i64,
-    pub category: u64,
+    pub category: i64,
 }
 
 #[derive(Serialize, Debug)]
-struct Badge {
-    id: u64,
+pub struct Badge {
+    id: i64,
     name: String,
     description: String,
     points: i64,
@@ -252,31 +265,31 @@ impl Badge {
 
 #[derive(FromRow, Debug, Serialize)]
 pub struct RawBadge {
-    pub id: u64,
+    pub id: i64,
     pub name: String,
     pub description: String,
     pub points: i64,
-    pub category: u64,
+    pub category: i64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CreateBadgeOwnership {
-    pub team_id: u64,
-    pub badge_id: u64,
+    pub team_id: i64,
+    pub badge_id: i64,
     pub acquisition_date: String,
 }
 
 #[derive(FromRow, Debug)]
 pub struct BadgeOwnership {
-    pub id: u64,
-    pub team_id: u64,
-    pub badge_id: u64,
+    pub id: i64,
+    pub team_id: i64,
+    pub badge_id: i64,
     pub acquisition_date: actix_web::cookie::time::Date,
 }
 
 #[derive(Serialize, Debug)]
 struct OwnedBadge {
-    id: u64,
+    id: i64,
     acquisition_date: String,
     badge: Badge,
 }
@@ -294,15 +307,15 @@ impl OwnedBadge {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CreateLabelOwnership {
-    pub team_id: u64,
-    pub label_id: u64,
+    pub team_id: i64,
+    pub label_id: i64,
 }
 
 #[derive(FromRow, Debug)]
 pub struct LabelOwnership {
-    pub id: u64,
-    pub team_id: u64,
-    pub label_id: u64,
+    pub id: i64,
+    pub team_id: i64,
+    pub label_id: i64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -312,6 +325,6 @@ pub struct CreateLabel {
 
 #[derive(FromRow, Serialize, Debug)]
 pub struct Label {
-    pub id: u64,
+    pub id: i64,
     pub name: String,
 }

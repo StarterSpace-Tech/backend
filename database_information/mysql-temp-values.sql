@@ -14,8 +14,8 @@ INSERT INTO badge_categories (`name`) VALUES ('Stage 2');
 INSERT INTO badges (`name`, `description`, `points`, `category`) VALUES ('Logro 1', 'Primer logro del viaje', 200, 2);
 INSERT INTO badges (`name`, `description`, `points`, `category`) VALUES ('Platica de Felipe Ivan', 'Platica sobre como empezar un startup dada por Felipe Ivan', 700, 1);
 
-INSERT INTO persons (`team`, `name`, `career`, `graduation_date`, `picture_url`) VALUES (1, 'Felipe Ivan', 'ITC', '2026-01-01', 'https:');
-INSERT INTO persons (`team`, `name`, `career`, `graduation_date`, `picture_url`) VALUES (2, 'Nacho', 'BGB', '2023-01-01', 'https:');
+INSERT INTO persons (`team_id`, `name`, `career`, `graduation_date`, `picture_url`) VALUES (1, 'Felipe Ivan', 'ITC', '2026-01-01', 'https:');
+INSERT INTO persons (`team_id`, `name`, `career`, `graduation_date`, `picture_url`) VALUES (2, 'Nacho', 'BGB', '2023-01-01', 'https:');
 
 INSERT INTO label_ownerships(`team_id`, `label_id`) VALUES (1, 2);
 INSERT INTO label_ownerships(`team_id`, `label_id`) VALUES (1, 3);

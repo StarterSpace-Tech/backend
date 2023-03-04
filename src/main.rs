@@ -2,26 +2,34 @@ use actix_web::{http, error, Result, get, post, web, App, HttpResponse, HttpServ
 use sqlx::{mysql::*, ConnectOptions};
 use star_tec_backend::*;
 use derive_more::{Display, Error};
+use futures::*;
 
 #[get("/teams")]
 async fn teams(db: web::Data<AppState>) -> impl Responder {
-    let raw_teams = sqlx::query_as::<sqlx::mysql::MySql, RawTeam>("SELECT * FROM teams")
+    let raw_teams:Vec<RawTeam> = sqlx::query_as("SELECT * FROM teams")
         .fetch_all(&db.pool)
         .await
         .unwrap();
 
-    let mut teams:Vec<Team> = vec![];
+    // let (labels, badges, persons): (Vec<Label>, Vec<RawBadge>, Vec<RawPerson>) = sqlx::query_as(
+    let temp = sqlx::query!("SELECT * FROM labels;")
+    .fetch_all(&db.pool)
+    .await.unwrap();
+    println!("{:?}", temp);
+
+    let mut teams = vec![];
     for raw_team in raw_teams {
-        let team =  Team::from(&raw_team, &db.pool).await;
+        let team =  Team::from(raw_team, &db.pool);
         teams.push(team);
     }
+    let teams = future::join_all(teams).await;
 
     ( HttpResponse::Ok().json(teams), http::StatusCode::ACCEPTED )
 }
 
 #[get("/labels")]
 async fn labels(db: web::Data<AppState>) -> impl Responder {
-    let labels = sqlx::query_as::<sqlx::mysql::MySql, Label>("SELECT * FROM labels")
+    let labels = sqlx::query_as!(Label, "SELECT * FROM labels")
         .fetch_all(&db.pool)
         .await
         .unwrap();
@@ -31,7 +39,7 @@ async fn labels(db: web::Data<AppState>) -> impl Responder {
 
 #[get("/badges")]
 async fn badges(db: web::Data<AppState>) -> impl Responder {
-    let badges = sqlx::query_as::<sqlx::mysql::MySql, RawBadge>("SELECT * FROM badges")
+    let badges = sqlx::query_as!(RawBadge, "SELECT * FROM badges")
         .fetch_all(&db.pool)
         .await
         .unwrap();
@@ -41,7 +49,7 @@ async fn badges(db: web::Data<AppState>) -> impl Responder {
 
 #[get("/categories")]
 async fn categories(db: web::Data<AppState>) -> impl Responder {
-    let categories = sqlx::query_as::<sqlx::mysql::MySql, Category>("SELECT * FROM badge_categories")
+    let categories = sqlx::query_as!(Category, "SELECT * FROM badge_categories")
         .fetch_all(&db.pool)
         .await
         .unwrap();
@@ -51,12 +59,12 @@ async fn categories(db: web::Data<AppState>) -> impl Responder {
 
 
 #[get("/team/{id}")]
-async fn team_id(db: web::Data<AppState>, key: web::Path<String>) -> impl Responder {
-    let raw_team = sqlx::query_as::<sqlx::mysql::MySql, RawTeam>(&format!("SELECT * FROM teams WHERE `id`={}", key.into_inner()))
+async fn team_id(db: web::Data<AppState>, key: web::Path<i64>) -> impl Responder {
+    let raw_team = sqlx::query_as!(RawTeam, "SELECT * FROM teams WHERE id = $1", key.into_inner())
         .fetch_one(&db.pool)
         .await;
-    if let Ok(raw_team) = &raw_team {
-        let team =  Team::from(&raw_team, &db.pool).await;
+    if let Ok(raw_team) = raw_team {
+        let team =  Team::from(raw_team, &db.pool).await;
         return ( HttpResponse::Ok().json(team), http::StatusCode::ACCEPTED )
     };
     ( HttpResponse::Ok().json("ID does not exist"), http::StatusCode::NOT_FOUND )
@@ -80,7 +88,7 @@ async fn team_create(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respond
     .await
     .unwrap();
 
-    let raw_id = sqlx::query_as::<sqlx::mysql::MySql, RawID>(&format!("SELECT `id` FROM teams WHERE `name`='{}'", &raw_team.name))
+    let raw_id = sqlx::query_as!(RawID, "SELECT id FROM teams WHERE name = $1", &raw_team.name)
     .fetch_one(&db.pool)
     .await
     .unwrap();
@@ -194,7 +202,7 @@ async fn main() -> std::io::Result<()> {
 
     // Connect to database
     let database_url = std::env::var("DATABASE_URL").unwrap();
-    let pool = MySqlPool::connect(&database_url).await.expect("Unable to connect to database");
+    let pool = sqlx::postgres::PgPool::connect(&database_url).await.expect("Unable to connect to database");
 
     // Set debugger
     std::env::set_var("RUST_LOG", "actix_web=debug");
@@ -224,5 +232,5 @@ async fn main() -> std::io::Result<()> {
 
 #[derive(Clone)]
 struct AppState {
-    pool: sqlx::mysql::MySqlPool,
+    pool: sqlx::postgres::PgPool,
 }
