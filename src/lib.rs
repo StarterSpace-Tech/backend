@@ -116,13 +116,15 @@ impl Team {
     pub async fn load_labels(&self, pool: sqlx::postgres::PgPool) -> Vec<Label> {
         println!("labels");
         let team_id:i32 = self.id as i32;
-        let label_ownerships = sqlx::query_as!(LabelOwnership, "SELECT * FROM label_ownerships WHERE team_id = $1 ", 1i64)
+        let label_ownerships = sqlx::query_as::<sqlx::postgres::Postgres, LabelOwnership>( "SELECT * FROM label_ownerships WHERE team_id = $1 ")
+            .bind(self.id)
             .fetch_all(&pool)
             .await
             .unwrap();
         if label_ownerships.is_empty()  { return vec![] };
         let label_id_values:Vec<i64> = label_ownerships.iter().map(|l| l.label_id).collect();
-        let labels = sqlx::query_as!(Label, "SELECT * FROM labels WHERE id = ANY($1)", &label_id_values[..])
+        let labels = sqlx::query_as::<sqlx::postgres::Postgres, Label>("SELECT * FROM labels WHERE id = ANY($1)")
+            .bind(&label_id_values[..])
             .fetch_all(&pool)
             .await
             .unwrap();
@@ -131,18 +133,21 @@ impl Team {
     }
     pub async fn load_badges(&self, pool: sqlx::postgres::PgPool) -> Vec<OwnedBadge> {
         println!("badges");
-        let badge_ownerships = sqlx::query_as!(BadgeOwnership, "SELECT * FROM badge_ownerships WHERE team_id = $1", self.id)
+        let badge_ownerships = sqlx::query_as::<sqlx::postgres::Postgres, BadgeOwnership>("SELECT * FROM badge_ownerships WHERE team_id = $1")
+            .bind(self.id)
             .fetch_all(&pool)
             .await
             .unwrap();
         if badge_ownerships.is_empty()  { return vec![] };
         let mut badges:Vec<OwnedBadge> = vec![];
         for badge_ownership in badge_ownerships {
-            let raw_badge = sqlx::query_as!(RawBadge, "SELECT * FROM badges WHERE id = $1", badge_ownership.badge_id)
+            let raw_badge = sqlx::query_as::<sqlx::postgres::Postgres, RawBadge>("SELECT * FROM badges WHERE id = $1")
+                .bind(badge_ownership.badge_id)
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-            let category = sqlx::query_as!(Category, "SELECT * FROM badge_categories WHERE id = $1", raw_badge.category)
+            let category = sqlx::query_as::<sqlx::postgres::Postgres, Category>("SELECT * FROM badge_categories WHERE id = $1")
+                .bind(raw_badge.category)
                 .fetch_one(&pool)
                 .await
                 .unwrap();
@@ -154,7 +159,8 @@ impl Team {
     }
     pub async fn load_persons(& self, pool: sqlx::postgres::PgPool) -> Vec<Person> {
         println!("persons");
-        let raw_persons = sqlx::query_as!(RawPerson, "SELECT * FROM persons WHERE team_id = $1", self.id)
+        let raw_persons = sqlx::query_as::<sqlx::postgres::Postgres, RawPerson>("SELECT * FROM persons WHERE team_id = $1")
+            .bind(self.id)
             .fetch_all(&pool)
             .await
             .unwrap();

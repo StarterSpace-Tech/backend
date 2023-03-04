@@ -11,11 +11,6 @@ async fn teams(db: web::Data<AppState>) -> impl Responder {
         .await
         .unwrap();
 
-    // let (labels, badges, persons): (Vec<Label>, Vec<RawBadge>, Vec<RawPerson>) = sqlx::query_as(
-    let temp = sqlx::query!("SELECT * FROM labels;")
-    .fetch_all(&db.pool)
-    .await.unwrap();
-    println!("{:?}", temp);
 
     let mut teams = vec![];
     for raw_team in raw_teams {
@@ -29,7 +24,7 @@ async fn teams(db: web::Data<AppState>) -> impl Responder {
 
 #[get("/labels")]
 async fn labels(db: web::Data<AppState>) -> impl Responder {
-    let labels = sqlx::query_as!(Label, "SELECT * FROM labels")
+    let labels = sqlx::query_as::<sqlx::postgres::Postgres, Label>("SELECT * FROM labels")
         .fetch_all(&db.pool)
         .await
         .unwrap();
@@ -39,7 +34,7 @@ async fn labels(db: web::Data<AppState>) -> impl Responder {
 
 #[get("/badges")]
 async fn badges(db: web::Data<AppState>) -> impl Responder {
-    let badges = sqlx::query_as!(RawBadge, "SELECT * FROM badges")
+    let badges = sqlx::query_as::<sqlx::postgres::Postgres, RawBadge>("SELECT * FROM badges")
         .fetch_all(&db.pool)
         .await
         .unwrap();
@@ -49,7 +44,7 @@ async fn badges(db: web::Data<AppState>) -> impl Responder {
 
 #[get("/categories")]
 async fn categories(db: web::Data<AppState>) -> impl Responder {
-    let categories = sqlx::query_as!(Category, "SELECT * FROM badge_categories")
+    let categories = sqlx::query_as::<sqlx::postgres::Postgres, Category> ("SELECT * FROM badge_categories")
         .fetch_all(&db.pool)
         .await
         .unwrap();
@@ -60,7 +55,8 @@ async fn categories(db: web::Data<AppState>) -> impl Responder {
 
 #[get("/team/{id}")]
 async fn team_id(db: web::Data<AppState>, key: web::Path<i64>) -> impl Responder {
-    let raw_team = sqlx::query_as!(RawTeam, "SELECT * FROM teams WHERE id = $1", key.into_inner())
+    let raw_team = sqlx::query_as::<sqlx::postgres::Postgres, RawTeam>("SELECT * FROM teams WHERE id = $1")
+        .bind(key.into_inner())
         .fetch_one(&db.pool)
         .await;
     if let Ok(raw_team) = raw_team {
@@ -88,7 +84,8 @@ async fn team_create(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respond
     .await
     .unwrap();
 
-    let raw_id = sqlx::query_as!(RawID, "SELECT id FROM teams WHERE name = $1", &raw_team.name)
+    let raw_id = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM teams WHERE name = $1")
+    .bind(&raw_team.name)
     .fetch_one(&db.pool)
     .await
     .unwrap();
