@@ -2,26 +2,26 @@ use sqlx::FromRow;
 use serde::{Serialize, Deserialize};
 use futures::join;
 
-#[derive(FromRow, Debug)]
+#[derive(FromRow, Debug, Serialize)]
 pub struct RawID {
     pub id: i64,
 }
 
 #[derive(Serialize, Debug)]
 pub struct Team {
-    id: i64,
-    rank: Option<i32>,
-    score: i64,
-    stage: i32,
-    name: String,
-    logo_url: Option<String>,
-    banner_url: Option<String>,
-    description: String,
-    creation_date: String,
-    location: String,
-    labels: Vec<Label>,
-    persons: Vec<Person>,
-    badges: Vec<OwnedBadge>,
+    pub id: i64,
+    pub rank: Option<i32>,
+    pub score: i64,
+    pub stage: i32,
+    pub name: String,
+    pub logo_url: Option<String>,
+    pub banner_url: Option<String>,
+    pub description: String,
+    pub creation_date: String,
+    pub location: String,
+    pub labels: Vec<Label>,
+    pub persons: Vec<Person>,
+    pub badges: Vec<OwnedBadge>,
 }
 
 #[derive(FromRow, Debug)]
@@ -45,7 +45,7 @@ impl RawTeam {
             id: 0,
             rank: None,
             score: 0,
-            stage: 1,
+            stage: 0,
             name: create_team.name,
             logo_url: None,
             banner_url: None,
@@ -58,10 +58,10 @@ impl RawTeam {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CreateTeam {
-    name: String,
-    description: String,
-    location: String,
-    creation_date: String,
+    pub name: String,
+    pub description: String,
+    pub location: String,
+    pub creation_date: String,
 }
 
 impl Team {
@@ -109,8 +109,7 @@ impl Team {
         team
     }
     pub async fn load_labels(&self, pool: sqlx::postgres::PgPool) -> Vec<Label> {
-        println!("labels");
-        let label_ownerships = sqlx::query_as::<sqlx::postgres::Postgres, LabelOwnership>( "SELECT * FROM label_ownerships WHERE team_id = $1 ")
+        let label_ownerships = sqlx::query_as::<sqlx::postgres::Postgres, LabelOwnership>( "SELECT * FROM label_ownerships WHERE team_id = $1")
             .bind(self.id)
             .fetch_all(&pool)
             .await
@@ -122,11 +121,9 @@ impl Team {
             .fetch_all(&pool)
             .await
             .unwrap();
-        println!("labels");
         labels
     }
     pub async fn load_badges(&self, pool: sqlx::postgres::PgPool) -> Vec<OwnedBadge> {
-        println!("badges");
         let badge_ownerships = sqlx::query_as::<sqlx::postgres::Postgres, BadgeOwnership>("SELECT * FROM badge_ownerships WHERE team_id = $1")
             .bind(self.id)
             .fetch_all(&pool)
@@ -148,31 +145,28 @@ impl Team {
             let owned_badge = OwnedBadge::from(raw_badge, category, &badge_ownership);
             badges.push(owned_badge);
         }
-        println!("badges");
         badges
     }
     pub async fn load_persons(& self, pool: sqlx::postgres::PgPool) -> Vec<Person> {
-        println!("persons");
         let raw_persons = sqlx::query_as::<sqlx::postgres::Postgres, RawPerson>("SELECT * FROM persons WHERE team_id = $1")
             .bind(self.id)
             .fetch_all(&pool)
             .await
             .unwrap();
         let persons:Vec<Person> = raw_persons.iter().map(|p| Person::from(&p)).collect();
-        println!("persons");
         persons
     }
 }
 
 #[derive(Serialize, Debug)]
 pub struct Person {
-    id: i64,
-    team_id: i64,
-    name: String,
-    career: String,
-    graduation_date: String,
-    picture_url: Option<String>,
-    portafolio_url: Option<String>,
+    pub id: i64,
+    pub team_id: i64,
+    pub name: String,
+    pub career: String,
+    pub graduation_date: String,
+    pub picture_url: Option<String>,
+    pub portafolio_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -244,11 +238,11 @@ pub struct CreateBadge {
 
 #[derive(Serialize, Debug)]
 pub struct Badge {
-    id: i64,
-    name: String,
-    description: String,
-    points: i64,
-    category: Category,
+    pub id: i64,
+    pub name: String,
+    pub description: String,
+    pub points: i64,
+    pub category: Category,
 }
 
 impl Badge {
