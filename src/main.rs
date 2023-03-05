@@ -1,7 +1,5 @@
-use actix_web::{http, error, Result, get, post, web, App, HttpResponse, HttpServer, Responder};
-use sqlx::{mysql::*, ConnectOptions};
+use actix_web::{http, get, post, web, App, HttpResponse, HttpServer, Responder};
 use star_tec_backend::*;
-use derive_more::{Display, Error};
 use futures::*;
 
 #[get("/teams")]
@@ -73,12 +71,12 @@ async fn team_create(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respond
     let raw_team:CreateTeam = serde_json::from_str(&raw_team).unwrap();
     let raw_team = RawTeam::from(raw_team);
 
-    sqlx::query("INSERT INTO teams (`score`, `stage`, `name`, `description`, `creation_date`, `location`) VALUES (?, ?, ?, ?, ?, ?)")
+    sqlx::query("INSERT INTO teams (score, stage, name, description, creation_date, location) VALUES ($1, $2, $3, $4, $5, $6)")
     .bind(raw_team.score)
     .bind(raw_team.stage)
     .bind(&raw_team.name)
     .bind(&raw_team.description)
-    .bind(raw_team.creation_date.to_string())
+    .bind(&raw_team.creation_date)
     .bind(&raw_team.location)
     .execute(&mut conn)
     .await
@@ -91,8 +89,8 @@ async fn team_create(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respond
     .unwrap();
 
     HttpResponse::SeeOther()
-    .header(http::header::LOCATION, format!("/team/{}", raw_id.id))
-    .finish()
+        .append_header((http::header::LOCATION, format!("/team/{}", raw_id.id)))
+        .finish()
 }
 
 #[post("/add/label")]
@@ -100,7 +98,7 @@ async fn add_label(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder
     let label_ownership = String::from_utf8(bytes.to_vec()).unwrap();
     let label_ownership:CreateLabelOwnership = serde_json::from_str(&label_ownership).unwrap();
 
-    sqlx::query("INSERT INTO label_ownerships (`team_id`, `label_id`) VALUES (?, ?)")
+    sqlx::query("INSERT INTO label_ownerships (team_id, label_id) VALUES ($1, $2)")
     .bind(label_ownership.team_id)
     .bind(label_ownership.label_id)
     .execute(&db.pool)
@@ -114,11 +112,12 @@ async fn add_label(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder
 async fn add_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder {
     let badge_ownership = String::from_utf8(bytes.to_vec()).unwrap();
     let badge_ownership:CreateBadgeOwnership = serde_json::from_str(&badge_ownership).unwrap();
-
-    sqlx::query("INSERT INTO badge_ownerships (`team_id`, `badge_id`, `acquisition_date`) VALUES (?, ?, ?)")
+    
+    let format = actix_web::cookie::time::format_description::parse("[year]-[month]-[day]").unwrap();
+    sqlx::query("INSERT INTO badge_ownerships (team_id, badge_id, acquisition_date) VALUES ($1, $2, $3)")
     .bind(badge_ownership.team_id)
     .bind(badge_ownership.badge_id)
-    .bind(badge_ownership.acquisition_date.to_string())
+    .bind(actix_web::cookie::time::Date::parse(&badge_ownership.acquisition_date, &format).unwrap())
     .execute(&db.pool)
     .await
     .unwrap();
@@ -131,11 +130,12 @@ async fn add_person(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responde
     let person = String::from_utf8(bytes.to_vec()).unwrap();
     let person:CreatePerson = serde_json::from_str(&person).unwrap();
 
-    sqlx::query("INSERT INTO persons (`team_id`, `name`, `career`, `graduation_date`) VALUES (?, ?, ?, ?)")
+    let format = actix_web::cookie::time::format_description::parse("[year]-[month]-[day]").unwrap();
+    sqlx::query("INSERT INTO persons (team_id, name, career, graduation_date) VALUES ($1, $2, $3, $4)")
     .bind(person.team_id)
     .bind(&person.name)
     .bind(&person.career)
-    .bind(&person.graduation_date)
+    .bind(actix_web::cookie::time::Date::parse(&person.graduation_date, &format).unwrap())
     .execute(&db.pool)
     .await
     .unwrap();
@@ -148,7 +148,7 @@ async fn create_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respon
     let badge = String::from_utf8(bytes.to_vec()).unwrap();
     let badge:CreateBadge = serde_json::from_str(&badge).unwrap();
 
-    sqlx::query("INSERT INTO badges (`name`, `description`, `points`, `category`) VALUES (?, ?, ?, ?)")
+    sqlx::query("INSERT INTO badges (name, description, points, category) VALUES ($1, $2, $3, $4)")
     .bind(&badge.name)
     .bind(&badge.description)
     .bind(badge.points)
@@ -165,7 +165,7 @@ async fn create_label(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respon
     let label = String::from_utf8(bytes.to_vec()).unwrap();
     let label:CreateLabel = serde_json::from_str(&label).unwrap();
 
-    sqlx::query("INSERT INTO labels (`name`) VALUES (?)")
+    sqlx::query("INSERT INTO labels (name) VALUES ($1)")
     .bind(&label.name)
     .execute(&db.pool)
     .await
@@ -179,7 +179,7 @@ async fn create_category(db: web::Data<AppState>, bytes: web::Bytes) -> impl Res
     let category = String::from_utf8(bytes.to_vec()).unwrap();
     let category:CreateCategory = serde_json::from_str(&category).unwrap();
 
-    sqlx::query("INSERT INTO badge_categories (`name`) VALUES (?)")
+    sqlx::query("INSERT INTO badge_categories (name) VALUES ($1)")
     .bind(&category.name)
     .execute(&db.pool)
     .await

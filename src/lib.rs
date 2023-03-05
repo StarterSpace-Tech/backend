@@ -1,11 +1,6 @@
-use sqlx::postgres::PgRow;
-use sqlx::Row;
 use sqlx::FromRow;
 use serde::{Serialize, Deserialize};
-use chrono::{NaiveDate, NaiveDateTime, Utc};
-use actix_web::cookie::time::Date;
 use futures::join;
-use sqlx::{Pool, Postgres, query_as};
 
 #[derive(FromRow, Debug)]
 pub struct RawID {
@@ -115,7 +110,6 @@ impl Team {
     }
     pub async fn load_labels(&self, pool: sqlx::postgres::PgPool) -> Vec<Label> {
         println!("labels");
-        let team_id:i32 = self.id as i32;
         let label_ownerships = sqlx::query_as::<sqlx::postgres::Postgres, LabelOwnership>( "SELECT * FROM label_ownerships WHERE team_id = $1 ")
             .bind(self.id)
             .fetch_all(&pool)
@@ -294,7 +288,7 @@ pub struct BadgeOwnership {
 }
 
 #[derive(Serialize, Debug)]
-struct OwnedBadge {
+pub struct OwnedBadge {
     id: i64,
     acquisition_date: String,
     badge: Badge,
