@@ -255,6 +255,6 @@ This method returns the category's `id`.
 | id*    | id of object    |
 | force  | (false default) |
 
-$type \in { label, badge, person, category, person, team }$
+`type` $\in$ { `label`, `badge`, `person`, `category`, `person`, `team` }
 
 If `force` can be `true` or `false`. If it is `true`, any link to that object will be deleted.
