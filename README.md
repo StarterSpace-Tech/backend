@@ -257,4 +257,4 @@ This method returns the category's `id`.
 
 `type` $\in$ { `label`, `badge`, `person`, `category`, `person`, `team` }
 
-If `force` can be `true` or `false`. If it is `true`, any link to that object will be deleted.
+`force` can be `true` or `false`. If it is `true`, any object with a link to that object will also be deleted.
