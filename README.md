@@ -221,6 +221,8 @@ Creates a new badge. The request's body needs to have a `JSON` `BODY` with the f
 }
 ```
 
+This method returns the badge's `id`.
+
 ## POST /create/label
 
 Creates a new label. The request's body needs to have a `JSON` `BODY` with the following format:
@@ -231,6 +233,8 @@ Creates a new label. The request's body needs to have a `JSON` `BODY` with the f
 }
 ```
 
+This method returns the labels's `id`.
+
 ## POST /create/category
 
 Creates a new category. The request's body needs to have a `JSON` `BODY` with the following format:
@@ -240,3 +244,17 @@ Creates a new category. The request's body needs to have a `JSON` `BODY` with th
     "name": "string*"
 }
 ```
+
+This method returns the category's `id`.
+
+## POST /delete
+
+| HEADER | Content         |
+|--------|-----------------|
+| type*  | type of object  |
+| id*    | id of object    |
+| force  | (false default) |
+
+$type \in \{ label, badge, person, category, person, team \}$
+
+If `force` can be `true` or `false`. If it is `true`, any link to that object will be deleted.

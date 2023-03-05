@@ -166,10 +166,18 @@ async fn create_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respon
     .bind(&badge.description)
     .bind(badge.points)
     .bind(badge.category)
-    .execute(&db.pool)
+    .execute(&db.pool.clone())
     .await
     { return HttpResponse::BadRequest().json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
-    HttpResponse::Ok().into()
+
+    let id:i64 = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM badges WHERE name = $1")
+    .bind(&badge.name)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap()
+    .id;
+
+    HttpResponse::Ok().json(id)
 }
 
 #[post("/create/label")]
@@ -183,10 +191,18 @@ async fn create_label(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respon
 
     if let Err(err) = sqlx::query("INSERT INTO labels (name) VALUES ($1)")
     .bind(&label.name)
-    .execute(&db.pool)
+    .execute(&db.pool.clone())
     .await
     { return HttpResponse::BadRequest().json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
-    HttpResponse::Ok().into()
+
+    let id:i64 = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM labels WHERE name = $1")
+    .bind(&label.name)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap()
+    .id;
+
+    HttpResponse::Ok().json(id)
 }
 
 #[post("/create/category")]
@@ -200,6 +216,106 @@ async fn create_category(db: web::Data<AppState>, bytes: web::Bytes) -> impl Res
 
     if let Err(err) = sqlx::query("INSERT INTO badge_categories (name) VALUES ($1)")
     .bind(&category.name)
+    .execute(&db.pool.clone())
+    .await
+    { return HttpResponse::BadRequest().json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+
+    let id:i64 = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM badge_categories WHERE name = $1")
+    .bind(&category.name)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap()
+    .id;
+
+    HttpResponse::Ok().json(id)
+}
+
+async fn delete_secondaries(table: &str, field: &str, id: i64, pool: sqlx::postgres::PgPool) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
+    let query = format!("DELETE FROM {} WHERE {} = $1", table, field);
+
+    sqlx::query(&query)
+    .bind(id)
+    .execute(&pool)
+    .await
+}
+
+#[post("/delete")]
+async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Responder {
+    let headers = req.headers();
+    let force = match headers.get("force"){
+        Some(value) if value.as_bytes() == "true".as_bytes() => true,
+        Some(value) if value.as_bytes() == "false".as_bytes() => false,
+        Some(_) => return HttpResponse::BadRequest().json("UNEXPECTED VALUE FOR force"),
+        None => false,
+    };
+    let id:i64 = match headers.get("id") {
+        Some(id) => match String::from_utf8(id.as_bytes().to_vec()).unwrap().parse() {
+            Ok(id) => id,
+            Err(err) => return HttpResponse::BadRequest().json(format!("ERROR WITH id: {}", err.to_string())),
+        }
+        None => return HttpResponse::BadRequest().json("NO id FOUND"),
+    };
+    let taip = match headers.get("type") {
+        Some(taip) => String::from_utf8(taip.as_bytes().to_vec()).unwrap(),
+        None => return HttpResponse::BadRequest().json("NO type FOUND"),
+    };
+    let query = format!("DELETE FROM {} WHERE id = $1", match &taip[..] {
+        // Delete label ownerships
+        "label" => {
+            if force { delete_secondaries("label_ownerships", "label_id", id, db.pool.clone()).await.unwrap(); }        
+            "labels"
+        },
+
+        // Delete badge ownerships
+        "badge" => {
+            if force { delete_secondaries("badge_ownerships", "badge_id", id, db.pool.clone()).await.unwrap(); }        
+            "badges"
+        },
+
+        // delete badges with category and badge ownerhips
+        "category" => {
+            if force {
+                let badge_ids = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM badges WHERE category = $1")
+                    .bind(id)
+                    .fetch_all(&db.pool.clone())
+                    .await
+                    .unwrap();
+                let badge_ids:Vec<i64> = badge_ids.iter().map(|b| b.id).collect();
+                sqlx::query("DELETE FROM badge_ownerships WHERE badge_id = ANY($1)")
+                    .bind(&badge_ids[..])
+                    .execute(&db.pool.clone())
+                    .await
+                    .unwrap();
+                sqlx::query("DELETE FROM badges WHERE id = $1")
+                    .bind(id)
+                    .execute(&db.pool.clone())
+                    .await
+                    .unwrap();
+            }
+            "badge_categories"
+        },
+
+        "person" => "persons",
+
+        // Delete badge and label ownerhips and people
+        "team" => {
+            if force {
+                let links = vec![
+                    delete_secondaries("label_ownerships", "team_id", id, db.pool.clone()),
+                    delete_secondaries("badge_ownerships", "team_id", id, db.pool.clone()),
+                    delete_secondaries("persons", "team_id", id, db.pool.clone()),
+                ];
+                let links = future::join_all(links).await;
+                for res in  links {
+                    res.unwrap();
+                }
+            }        
+            "teams"
+        },
+        _ => return HttpResponse::BadRequest().json("TYPE IS NOT AVAILABLE FOR DELETION"),
+    });
+    if let Err(err) = sqlx::query(&query)
+    .bind(id)
     .execute(&db.pool)
     .await
     { return HttpResponse::BadRequest().json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
@@ -236,6 +352,7 @@ async fn main() -> std::io::Result<()> {
             .service(create_badge)
             .service(create_label)
             .service(create_category)
+            .service(delete)
     })
     .bind((host, port))?
     .run()
