@@ -328,7 +328,7 @@ pub struct Label {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Edit {
+pub struct EditTeam {
     pub name: Option<String>,
     pub description: Option<String>,
     pub stage: Option<i32>,
@@ -336,11 +336,114 @@ pub struct Edit {
     pub logo_url: Option<String>,
     pub banner_url: Option<String>,
     pub location: Option<String>,
+}
+
+impl EditTeam {
+    pub fn query(self) -> String {
+        let mut query = String::from("UPDATE teams SET ");
+        if let Some(name) = &self.name { query.push_str(&format!("name = '{}', ", name)); }
+        if let Some(description) = &self.description { query.push_str(&format!("description = '{}', ", description)); }
+        if let Some(stage) = &self.stage { query.push_str(&format!("stage = {}, ", stage)); }
+        if let Some(creation_date) = &self.creation_date { query.push_str(&format!("creation_date = '{}', ", creation_date)); }
+        if let Some(location) = &self.location { query.push_str(&format!("location = '{}', ", location)); }
+        let null = String::from("null");
+        match self.logo_url {
+            Some(logo_url) if logo_url == null =>  query.push_str("logo_url = null, "),
+            Some(logo_url) =>  query.push_str(&format!("logo_url = '{}', ", logo_url)),
+            None => {},
+        }
+        match self.banner_url {
+            Some(banner_url) if banner_url == null =>  query.push_str("banner_url = null, "),
+            Some(banner_url) =>  query.push_str(&format!("banner_url = '{}', ", banner_url)),
+            None => {},
+        }
+        query.truncate(query.len() - 2);
+        query.push_str(" WHERE id = $1");
+        query
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct EditLabel {
+    pub name: Option<String>,
+}
+
+impl EditLabel {
+    pub fn query(self) -> String {
+        let mut query = String::from("UPDATE labels SET ");
+        if let Some(name) = &self.name { query.push_str(&format!("name = '{}', ", name)); }
+        query.truncate(query.len() - 2);
+        query.push_str(" WHERE id = $1");
+        query
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct EditBadge {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub points: Option<i64>,
+    pub category: Option<i64>,
+}
+
+impl EditBadge {
+    pub fn query(self) -> String {
+        let mut query = String::from("UPDATE badges SET ");
+        if let Some(name) = &self.name { query.push_str(&format!("name = '{}', ", name)); }
+        if let Some(description) = &self.description { query.push_str(&format!("description = '{}', ", description)); }
+        if let Some(points) = &self.points { query.push_str(&format!("points = {}, ", points)); }
+        if let Some(category) = &self.category { query.push_str(&format!("category = {}, ", category)); }
+        query.truncate(query.len() - 2);
+        query.push_str(" WHERE id = $1");
+        query
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct EditCategory {
+    pub name: Option<String>,
+}
+
+impl EditCategory {
+    pub fn query(self) -> String {
+        let mut query = String::from("UPDATE badge_categories SET ");
+        if let Some(name) = &self.name { query.push_str(&format!("name = '{}', ", name)); }
+        query.truncate(query.len() - 2);
+        query.push_str(" WHERE id = $1");
+        query
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct EditPerson {
+    pub name: Option<String>,
     pub team_id: Option<i64>,
     pub career: Option<String>,
     pub graduation_date: Option<String>,
     pub picture_url: Option<String>,
     pub portafolio_url: Option<String>,
-    pub points: Option<i64>,
-    pub category: Option<i64>,
+}
+
+impl EditPerson {
+    pub fn query(self) -> String {
+        let mut query = String::from("UPDATE persons SET ");
+        if let Some(name) = &self.name { query.push_str(&format!("name = '{}', ", name)); }
+        if let Some(team_id) = &self.team_id { query.push_str(&format!("team_id = {}, ", team_id)); }
+        if let Some(career) = &self.career { query.push_str(&format!("career = '{}', ", career)); }
+        if let Some(graduation_date) = &self.graduation_date { query.push_str(&format!("graduation_date = '{}', ", graduation_date)); }
+        let null = String::from("null");
+        match self.picture_url {
+            Some(picture_url) if picture_url == null =>  query.push_str("picture_url = null, "),
+            Some(picture_url) =>  query.push_str(&format!("picture_url = '{}', ", picture_url)),
+            None => {},
+        }
+        match self.portafolio_url {
+            Some(portafolio_url) if portafolio_url == null =>  query.push_str("portafolio_url = null, "),
+            Some(portafolio_url) =>  query.push_str(&format!("portafolio_url = '{}', ", portafolio_url)),
+            None => {},
+        }
+        query.truncate(query.len() - 2);
+        query.push_str(" WHERE id = $1");
+        query
+    }
 }

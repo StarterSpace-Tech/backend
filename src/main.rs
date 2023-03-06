@@ -328,12 +328,6 @@ async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Re
 #[post("/edit")]
 async fn edit(db: web::Data<AppState>, req: actix_web::HttpRequest, bytes: web::Bytes) -> impl Responder {
     let raw_json = String::from_utf8(bytes.to_vec()).unwrap();
-    let raw_json = serde_json::from_str(&raw_json);
-    let raw_json:Edit = match raw_json {
-        Ok(raw_json) => raw_json,
-        Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
-    };
-
     let headers = req.headers();
     let id:i64 = match headers.get("id") {
         Some(id) => match String::from_utf8(id.as_bytes().to_vec()).unwrap().parse() {
@@ -347,120 +341,52 @@ async fn edit(db: web::Data<AppState>, req: actix_web::HttpRequest, bytes: web::
         None => return HttpResponse::BadRequest().json("NO type FOUND"),
     };
 
-    let format = actix_web::cookie::time::format_description::parse("[year]-[month]-[day]").unwrap();
-    let mut str_values = std::collections::HashMap::new();
-    let mut url_values = std::collections::HashMap::new();
-    let mut i64_values = std::collections::HashMap::new();
-    let mut i32_values = std::collections::HashMap::new();
-    let mut date_values = std::collections::HashMap::new();
-
-    if taip == "label" || taip == "badge" || taip == "person" || taip == "team" { if let Some(name) = raw_json.name { str_values.insert("name", name); }; };
-    if taip == "badge" || taip == "team" { if let Some(description) = raw_json.description { str_values.insert("description", description); }; };
-    if taip == "team" { if let Some(career) = raw_json.career { str_values.insert("career", career); }; };
-    if taip == "team" { if let Some(location) = raw_json.location { str_values.insert("location", location); }; };
-
-    if taip == "team" { if let Some(logo_url) = raw_json.logo_url { url_values.insert("logo_url", match &logo_url[..] { "null" => None, _ => Some(logo_url), }); }; };
-    if taip == "team" { if let Some(banner_url) = raw_json.banner_url { url_values.insert("banner_url", match &banner_url[..] { "null" => None, _ => Some(banner_url), }); }; };
-    if taip == "person" { if let Some(picture_url) = raw_json.picture_url { url_values.insert("picture_url", match &picture_url[..] { "null" => None, _ => Some(picture_url), }); }; };
-    if taip == "person" { if let Some(portafolio_url) = raw_json.portafolio_url { url_values.insert("portafolio_url", match &portafolio_url[..] { "null" => None, _ => Some(portafolio_url), }); }; };
-
-    if taip == "team" { if let Some(stage) = raw_json.stage { i32_values.insert("stage", stage); }; }
-
-    if taip == "person" { if let Some(teamid) = raw_json.team_id { i64_values.insert("team_id", teamid); }; };
-    if taip == "badge" { if let Some(points) = raw_json.points { i64_values.insert("points", points); }; };
-    if taip == "badge" { if let Some(category) = raw_json.category { i64_values.insert("category", category); }; };
-
-
-    if taip == "team" { 
-        if let Some(creation_date) = raw_json.creation_date { 
-            let creation_date = match actix_web::cookie::time::Date::parse(&creation_date, &format) {
-                Ok(date) => date,
-                Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING creation_date: {}", err)),
+    let query = match &taip[..] {
+        "category" => {
+            let raw_json:EditCategory = match serde_json::from_str(&raw_json) {
+                Ok(raw_json) => raw_json,
+                Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
             };
-            date_values.insert("creation_date", creation_date); 
-        }; 
-    };
-    if taip == "person" { 
-        if let Some(graduation_date) = raw_json.graduation_date { 
-            let graduation_date = match actix_web::cookie::time::Date::parse(&graduation_date, &format) {
-                Ok(date) => date,
-                Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING graduation_date: {}", err)),
+            raw_json.query()
+        }
+        "label" => {
+            let raw_json:EditLabel = match serde_json::from_str(&raw_json) {
+                Ok(raw_json) => raw_json,
+                Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
             };
-            date_values.insert("graduation_date", graduation_date); 
-        }; 
-    };
-
-    let taip = match &taip[..] {
-        "label" => "labels",
-        "badge" => "badges",
-        "person" => "persons",
-        "team" => "teams",
+            raw_json.query()
+        },
+        "badge" => {
+            let raw_json:EditBadge = match serde_json::from_str(&raw_json) {
+                Ok(raw_json) => raw_json,
+                Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+            };
+            raw_json.query()
+        },
+        "person" => {
+            let raw_json:EditPerson = match serde_json::from_str(&raw_json) {
+                Ok(raw_json) => raw_json,
+                Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+            };
+            raw_json.query()
+        },
+        "team" => {
+            let raw_json:EditTeam = match serde_json::from_str(&raw_json) {
+                Ok(raw_json) => raw_json,
+                Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+            };
+            raw_json.query()
+        },
         _ => return HttpResponse::BadRequest().json("TYPE IS NOT AVAILABLE FOR DELETION"),
     };
 
-    let mut results = vec![];
-    for val in str_values {
-        let query = format!("UPDATE {} SET {} = $1 WHERE id = $2", taip, val.0);
-        let res = sqlx::query(&query)
-            .bind(&val.1)
-            .bind(id)
-            .execute(&db.pool.clone())
-            .await;
-        results.push(match res {
-            Ok(_) => format!("SUCCESFULLY ADDED {}", val.0),
-            Err(err) => format!("ERROR ADDING {}: {}", val.0, err),
-        });
-    }
-    for val in i32_values {
-        let query = format!("UPDATE {} SET {} = $1 WHERE id = $2", taip, val.0);
-        let res = sqlx::query(&query)
-            .bind(&val.1)
-            .bind(id)
-            .execute(&db.pool.clone())
-            .await;
-        results.push(match res {
-            Ok(_) => format!("SUCCESFULLY ADDED {}", val.0),
-            Err(err) => format!("ERROR ADDING {}: {}", val.0, err),
-        });
-    }
-    for val in i64_values {
-        let query = format!("UPDATE {} SET {} = $1 WHERE id = $2", taip, val.0);
-        let res = sqlx::query(&query)
-            .bind(&val.1)
-            .bind(id)
-            .execute(&db.pool.clone())
-            .await;
-        results.push(match res {
-            Ok(_) => format!("SUCCESFULLY ADDED {}", val.0),
-            Err(err) => format!("ERROR ADDING {}: {}", val.0, err),
-        });
-    }
-    for val in date_values {
-        let query = format!("UPDATE {} SET {} = $1 WHERE id = $2", taip, val.0);
-        let res = sqlx::query(&query)
-            .bind(&val.1)
-            .bind(id)
-            .execute(&db.pool.clone())
-            .await;
-        results.push(match res {
-            Ok(_) => format!("SUCCESFULLY ADDED {}", val.0),
-            Err(err) => format!("ERROR ADDING {}: {}", val.0, err),
-        });
-    }
-    for val in url_values {
-        let query = format!("UPDATE {} SET {} = $1 WHERE id = $2", taip, val.0);
-        let res = sqlx::query(&query)
-            .bind(&val.1)
-            .bind(id)
-            .execute(&db.pool.clone())
-            .await;
-        results.push(match res {
-            Ok(_) => format!("SUCCESFULLY ADDED {}", val.0),
-            Err(err) => format!("ERROR ADDING {}: {}", val.0, err),
-        });
-    }
+    if let Err(err) = sqlx::query(&query)
+        .bind(id)
+        .execute(&db.pool)
+        .await
+    { return HttpResponse::BadRequest().json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
 
-    HttpResponse::Ok().json(results)
+    HttpResponse::Ok().into()
 }
 
 #[actix_web::main]
