@@ -167,6 +167,8 @@ Creates a new team. The request's body needs too have a `JSON` `BODY` with the f
     "description": "string*",
 	"creation_date": "string (YYYY-MM-DD)*",
     "location": "string*",
+    "logo_url": "string?",
+    "banner_url": "string?"
 }
 ```
 
@@ -204,7 +206,9 @@ Add a new person to a team. The request's body needs to have a `JSON` `BODY` wit
     "team_id": "string*",
     "name": "string*",
     "career": "string*",
-    "graduation_date": "string (YYYY-MM-DD)*"
+    "graduation_date": "string (YYYY-MM-DD)*",
+    "picture_url": "string?",
+    "portafolio_url": "string?"
 }
 ```
 
@@ -258,3 +262,61 @@ This method returns the category's `id`.
 `type` $\in$ { `label`, `badge`, `person`, `category`, `person`, `team` }
 
 `force` can be `true` or `false`. If it is `true`, any object with a link to that object will also be deleted.
+
+## POST /edit
+
+| HEADER | Content        |
+|--------|----------------|
+| type*  | type of object |
+| id*    | id of object   |
+
+If any of the values in the `JSON`s are not set in them, they will be kept as is. If you wish to set a nullable value to `null`, pass in `"null"` as the value.
+
+### type == label
+
+```json
+{
+	"name": "string?",
+}
+```
+
+### type == badge
+
+```json
+{
+	"name": "string?",
+	"description": "string?",
+	"points": "int?",
+	"category": "int?", 
+}
+```
+
+
+### type == person
+
+```json
+{
+	"team_id": "int?",
+	"name": "string",
+	"career": "string?",
+	"graduation_date": "string (YYYY-MM-DD)?",
+	"picture_url": "string?",
+	"portafolio_url": "stirng?",
+}
+```
+
+### type == team
+
+```json
+{
+	"name": "string",
+	"description": "string?",
+	"stage": "int?",
+	"creation_date": "string (YYYY-MM-DD)?",
+	"logo_url": "string?",
+	"banner_url": "stirng?",
+	"location": "location",
+}
+```
+
+In return you will get a list of values that where successfully added and the ones that failed.

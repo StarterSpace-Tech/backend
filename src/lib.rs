@@ -47,8 +47,8 @@ impl RawTeam {
             score: 0,
             stage: 0,
             name: create_team.name,
-            logo_url: None,
-            banner_url: None,
+            logo_url: create_team.logo_url,
+            banner_url: create_team.banner_url,
             description: create_team.description,
             creation_date: actix_web::cookie::time::Date::parse(&create_team.creation_date, &format).unwrap(),
             location: create_team.location,
@@ -62,6 +62,8 @@ pub struct CreateTeam {
     pub description: String,
     pub location: String,
     pub creation_date: String,
+    pub banner_url: Option<String>,
+    pub logo_url: Option<String>,
 }
 
 impl Team {
@@ -175,6 +177,8 @@ pub struct CreatePerson {
     pub name: String,
     pub career: String,
     pub graduation_date: String,
+    pub picture_url: Option<String>,
+    pub portafolio_url: Option<String>,
 }
 
 impl Person {
@@ -321,4 +325,22 @@ pub struct CreateLabel {
 pub struct Label {
     pub id: i64,
     pub name: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Edit {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub stage: Option<i32>,
+    pub creation_date: Option<String>,
+    pub logo_url: Option<String>,
+    pub banner_url: Option<String>,
+    pub location: Option<String>,
+    pub team_id: Option<i64>,
+    pub career: Option<String>,
+    pub graduation_date: Option<String>,
+    pub picture_url: Option<String>,
+    pub portafolio_url: Option<String>,
+    pub points: Option<i64>,
+    pub category: Option<i64>,
 }
