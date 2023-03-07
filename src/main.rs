@@ -69,7 +69,11 @@ async fn team_create(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respond
     let raw_team = serde_json::from_str(&raw_team);
     let raw_team:CreateTeam = match raw_team {
         Ok(raw_team) => raw_team,
-        Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+        Err(err) => return HttpResponse::BadRequest()
+        .append_header(("Access-Control-Allow-Origin", "*"))
+        .append_header(("Access-Control-Allow-Methods", "POST GET OPTIONS"))
+        .append_header(("Access-Control-Allow-Headers", "Content-Type"))
+        .json(format!("ERROR PARSING JSON: {}", err.to_string())),
     };
     let raw_team = RawTeam::from(raw_team);
     println!("{:?}", raw_team);
@@ -83,7 +87,13 @@ async fn team_create(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respond
     .bind(&raw_team.location)
     .execute(&db.pool.clone())
     .await
-    { return HttpResponse::BadRequest().json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    { return HttpResponse::BadRequest()        
+        .append_header(("Access-Control-Allow-Origin", "*"))
+        .append_header(("Access-Control-Allow-Methods", "POST GET OPTIONS"))
+        .append_header(("Access-Control-Allow-Headers", "Content-Type"))
+        .json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) 
+
+    }
 
     let id:i64 = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM teams WHERE name = $1")
     .bind(&raw_team.name)
@@ -93,7 +103,9 @@ async fn team_create(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respond
     .id;
 
     HttpResponse::Ok()
-        .append_header(("Access-Control-Allow-Origin", "*")).json(id)
+        .append_header(("Access-Control-Allow-Origin", "*"))
+        .append_header(("Access-Control-Allow-Methods", "POST GET OPTIONS"))
+        .append_header(("Access-Control-Allow-Headers", "Content-Type")).json(id)
 }
 
 #[post("/add/label")]
