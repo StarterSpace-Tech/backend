@@ -16,7 +16,8 @@ async fn teams(db: web::Data<AppState>) -> impl Responder {
     }
     let teams = future::join_all(teams).await;
 
-    HttpResponse::Ok().json(teams)
+    HttpResponse::Ok()
+        .append_header(("Access-Control-Allow-Origin", "*")).json(teams)
 }
 
 #[get("/labels")]
@@ -91,7 +92,8 @@ async fn team_create(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respond
     .unwrap()
     .id;
 
-    HttpResponse::Ok().json(id)
+    HttpResponse::Ok()
+        .append_header(("Access-Control-Allow-Origin", "*")).json(id)
 }
 
 #[post("/add/label")]
