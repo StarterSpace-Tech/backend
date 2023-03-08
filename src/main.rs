@@ -117,7 +117,7 @@ async fn add_label(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder
     .execute(&db.pool.clone())
     .await
     { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
-    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).into()
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 
 #[post("/add/badge")]
@@ -137,7 +137,7 @@ async fn add_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder
     .execute(&db.pool)
     .await
     { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
-    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).into()
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 
 #[post("/add/person")]
@@ -160,7 +160,7 @@ async fn add_person(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responde
     .execute(&db.pool)
     .await
     { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
-    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).into()
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 
 #[post("/create/badge")]
@@ -330,7 +330,7 @@ async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Re
     .execute(&db.pool)
     .await
     { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
-    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).into()
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 
 #[post("/edit")]
@@ -394,7 +394,7 @@ async fn edit(db: web::Data<AppState>, req: actix_web::HttpRequest, bytes: web::
         .await
     { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
 
-    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).into()
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 
 #[actix_web::main]
