@@ -71,12 +71,9 @@ async fn team_create(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respond
         Ok(raw_team) => raw_team,
         Err(err) => return HttpResponse::BadRequest()
         .append_header(("Access-Control-Allow-Origin", "*"))
-        .append_header(("Access-Control-Allow-Methods", "POST GET OPTIONS"))
-        .append_header(("Access-Control-Allow-Headers", "Content-Type"))
         .json(format!("ERROR PARSING JSON: {}", err.to_string())),
     };
     let raw_team = RawTeam::from(raw_team);
-    println!("{:?}", raw_team);
 
     if let Err(err) = sqlx::query("INSERT INTO teams (score, stage, name, description, creation_date, location) VALUES ($1, $2, $3, $4, $5, $6)")
     .bind(raw_team.score)
@@ -89,8 +86,6 @@ async fn team_create(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respond
     .await
     { return HttpResponse::BadRequest()        
         .append_header(("Access-Control-Allow-Origin", "*"))
-        .append_header(("Access-Control-Allow-Methods", "POST GET OPTIONS"))
-        .append_header(("Access-Control-Allow-Headers", "Content-Type"))
         .json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) 
 
     }
@@ -104,8 +99,7 @@ async fn team_create(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respond
 
     HttpResponse::Ok()
         .append_header(("Access-Control-Allow-Origin", "*"))
-        .append_header(("Access-Control-Allow-Methods", "POST GET OPTIONS"))
-        .append_header(("Access-Control-Allow-Headers", "Content-Type")).json(id)
+        .json(id)
 }
 
 #[post("/add/label")]
