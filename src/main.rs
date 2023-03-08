@@ -27,7 +27,7 @@ async fn labels(db: web::Data<AppState>) -> impl Responder {
         .await
         .unwrap();
 
-    HttpResponse::Ok().json(labels)
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json(labels)
 }
 
 #[get("/badges")]
@@ -37,7 +37,7 @@ async fn badges(db: web::Data<AppState>) -> impl Responder {
         .await
         .unwrap();
 
-    HttpResponse::Ok().json(badges)
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json(badges)
 }
 
 #[get("/categories")]
@@ -47,7 +47,7 @@ async fn categories(db: web::Data<AppState>) -> impl Responder {
         .await
         .unwrap();
 
-    HttpResponse::Ok().json(categories)
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json(categories)
 }
 
 #[get("/team/{id}")]
@@ -58,9 +58,9 @@ async fn team_id(db: web::Data<AppState>, key: web::Path<i64>) -> impl Responder
         .await;
     if let Ok(raw_team) = raw_team {
         let team =  Team::from(raw_team, &db.pool).await;
-        return HttpResponse::Ok().json(team)
+        return HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json(team)
     };
-    HttpResponse::NotFound().json("ID does not exist")
+    HttpResponse::NotFound().append_header(("Access-Control-Allow-Origin", "*")).json("ID does not exist")
 }
 
 #[post("/create/team")]
@@ -108,7 +108,7 @@ async fn add_label(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder
     let label_ownership = serde_json::from_str(&label_ownership);
     let label_ownership:CreateLabelOwnership = match label_ownership {
         Ok(label_ownership) => label_ownership,
-        Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
     };
 
     if let Err(err) = sqlx::query("INSERT INTO label_ownerships (team_id, label_id) VALUES ($1, $2)")
@@ -116,8 +116,8 @@ async fn add_label(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder
     .bind(label_ownership.label_id)
     .execute(&db.pool.clone())
     .await
-    { return HttpResponse::BadRequest().json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
-    HttpResponse::Ok().into()
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).into()
 }
 
 #[post("/add/badge")]
@@ -126,7 +126,7 @@ async fn add_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder
     let badge_ownership = serde_json::from_str(&badge_ownership);
     let badge_ownership:CreateBadgeOwnership = match badge_ownership {
         Ok(badge_ownership) => badge_ownership,
-        Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
     };
     
     let format = actix_web::cookie::time::format_description::parse("[year]-[month]-[day]").unwrap();
@@ -136,8 +136,8 @@ async fn add_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder
     .bind(actix_web::cookie::time::Date::parse(&badge_ownership.acquisition_date, &format).unwrap())
     .execute(&db.pool)
     .await
-    { return HttpResponse::BadRequest().json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
-    HttpResponse::Ok().into()
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).into()
 }
 
 #[post("/add/person")]
@@ -146,7 +146,7 @@ async fn add_person(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responde
     let person = serde_json::from_str(&person);
     let person:CreatePerson = match person {
         Ok(person) => person,
-        Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
     };
 
     let format = actix_web::cookie::time::format_description::parse("[year]-[month]-[day]").unwrap();
@@ -159,8 +159,8 @@ async fn add_person(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responde
     .bind(&person.portafolio_url)
     .execute(&db.pool)
     .await
-    { return HttpResponse::BadRequest().json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
-    HttpResponse::Ok().into()
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).into()
 }
 
 #[post("/create/badge")]
@@ -169,7 +169,7 @@ async fn create_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respon
     let badge = serde_json::from_str(&badge);
     let badge:CreateBadge = match badge {
         Ok(badge) => badge,
-        Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
     };
 
     if let Err(err) = sqlx::query("INSERT INTO badges (name, description, points, category) VALUES ($1, $2, $3, $4)")
@@ -179,7 +179,7 @@ async fn create_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respon
     .bind(badge.category)
     .execute(&db.pool.clone())
     .await
-    { return HttpResponse::BadRequest().json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
 
     let id:i64 = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM badges WHERE name = $1")
     .bind(&badge.name)
@@ -188,7 +188,7 @@ async fn create_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respon
     .unwrap()
     .id;
 
-    HttpResponse::Ok().json(id)
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json(id)
 }
 
 #[post("/create/label")]
@@ -197,14 +197,14 @@ async fn create_label(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respon
     let label = serde_json::from_str(&label);
     let label:CreateLabel = match label {
         Ok(label) => label,
-        Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
     };
 
     if let Err(err) = sqlx::query("INSERT INTO labels (name) VALUES ($1)")
     .bind(&label.name)
     .execute(&db.pool.clone())
     .await
-    { return HttpResponse::BadRequest().json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
 
     let id:i64 = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM labels WHERE name = $1")
     .bind(&label.name)
@@ -213,7 +213,7 @@ async fn create_label(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respon
     .unwrap()
     .id;
 
-    HttpResponse::Ok().json(id)
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json(id)
 }
 
 #[post("/create/category")]
@@ -222,14 +222,14 @@ async fn create_category(db: web::Data<AppState>, bytes: web::Bytes) -> impl Res
     let category = serde_json::from_str(&category);
     let category:CreateCategory = match category {
         Ok(category) => category,
-        Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
     };
 
     if let Err(err) = sqlx::query("INSERT INTO badge_categories (name) VALUES ($1)")
     .bind(&category.name)
     .execute(&db.pool.clone())
     .await
-    { return HttpResponse::BadRequest().json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
 
     let id:i64 = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM badge_categories WHERE name = $1")
     .bind(&category.name)
@@ -238,7 +238,7 @@ async fn create_category(db: web::Data<AppState>, bytes: web::Bytes) -> impl Res
     .unwrap()
     .id;
 
-    HttpResponse::Ok().json(id)
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json(id)
 }
 
 async fn delete_secondaries(table: &str, field: &str, id: i64, pool: sqlx::postgres::PgPool) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
@@ -256,19 +256,19 @@ async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Re
     let force = match headers.get("force"){
         Some(value) if value.as_bytes() == "true".as_bytes() => true,
         Some(value) if value.as_bytes() == "false".as_bytes() => false,
-        Some(_) => return HttpResponse::BadRequest().json("UNEXPECTED VALUE FOR force"),
+        Some(_) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("UNEXPECTED VALUE FOR force"),
         None => false,
     };
     let id:i64 = match headers.get("id") {
         Some(id) => match String::from_utf8(id.as_bytes().to_vec()).unwrap().parse() {
             Ok(id) => id,
-            Err(err) => return HttpResponse::BadRequest().json(format!("ERROR WITH id: {}", err.to_string())),
+            Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR WITH id: {}", err.to_string())),
         }
-        None => return HttpResponse::BadRequest().json("NO id FOUND"),
+        None => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("NO id FOUND"),
     };
     let taip = match headers.get("type") {
         Some(taip) => String::from_utf8(taip.as_bytes().to_vec()).unwrap(),
-        None => return HttpResponse::BadRequest().json("NO type FOUND"),
+        None => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("NO type FOUND"),
     };
     let query = format!("DELETE FROM {} WHERE id = $1", match &taip[..] {
         // Delete label ownerships
@@ -323,14 +323,14 @@ async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Re
             }        
             "teams"
         },
-        _ => return HttpResponse::BadRequest().json("TYPE IS NOT AVAILABLE FOR DELETION"),
+        _ => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("TYPE IS NOT AVAILABLE FOR DELETION"),
     });
     if let Err(err) = sqlx::query(&query)
     .bind(id)
     .execute(&db.pool)
     .await
-    { return HttpResponse::BadRequest().json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
-    HttpResponse::Ok().into()
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).into()
 }
 
 #[post("/edit")]
@@ -340,61 +340,61 @@ async fn edit(db: web::Data<AppState>, req: actix_web::HttpRequest, bytes: web::
     let id:i64 = match headers.get("id") {
         Some(id) => match String::from_utf8(id.as_bytes().to_vec()).unwrap().parse() {
             Ok(id) => id,
-            Err(err) => return HttpResponse::BadRequest().json(format!("ERROR WITH id: {}", err.to_string())),
+            Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR WITH id: {}", err.to_string())),
         }
-        None => return HttpResponse::BadRequest().json("NO id FOUND"),
+        None => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("NO id FOUND"),
     };
     let taip = match headers.get("type") {
         Some(taip) => String::from_utf8(taip.as_bytes().to_vec()).unwrap(),
-        None => return HttpResponse::BadRequest().json("NO type FOUND"),
+        None => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("NO type FOUND"),
     };
 
     let query = match &taip[..] {
         "category" => {
             let raw_json:EditCategory = match serde_json::from_str(&raw_json) {
                 Ok(raw_json) => raw_json,
-                Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
             };
             raw_json.query()
         }
         "label" => {
             let raw_json:EditLabel = match serde_json::from_str(&raw_json) {
                 Ok(raw_json) => raw_json,
-                Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
             };
             raw_json.query()
         },
         "badge" => {
             let raw_json:EditBadge = match serde_json::from_str(&raw_json) {
                 Ok(raw_json) => raw_json,
-                Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
             };
             raw_json.query()
         },
         "person" => {
             let raw_json:EditPerson = match serde_json::from_str(&raw_json) {
                 Ok(raw_json) => raw_json,
-                Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
             };
             raw_json.query()
         },
         "team" => {
             let raw_json:EditTeam = match serde_json::from_str(&raw_json) {
                 Ok(raw_json) => raw_json,
-                Err(err) => return HttpResponse::BadRequest().json(format!("ERROR PARSING JSON: {}", err.to_string())),
+                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
             };
             raw_json.query()
         },
-        _ => return HttpResponse::BadRequest().json("TYPE IS NOT AVAILABLE FOR DELETION"),
+        _ => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("TYPE IS NOT AVAILABLE FOR DELETION"),
     };
 
     if let Err(err) = sqlx::query(&query)
         .bind(id)
         .execute(&db.pool)
         .await
-    { return HttpResponse::BadRequest().json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
 
-    HttpResponse::Ok().into()
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).into()
 }
 
 #[actix_web::main]
