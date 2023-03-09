@@ -419,7 +419,7 @@ async fn edit(db: web::Data<AppState>, req: actix_web::HttpRequest, bytes: web::
 #[post("update/rankings")]
 async fn update_rankings(db: web::Data<AppState>) -> impl Responder {
     update_ranking(db.pool.clone()).await;
-    HttpResponse::Ok()
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("OK")
 }
 
 #[actix_web::main]
@@ -435,6 +435,14 @@ async fn main() -> std::io::Result<()> {
     // Set debugger
     std::env::set_var("RUST_LOG", "actix_web=debug");
     env_logger::init();
+
+    // let conn = pool.clone();
+    // std::thread::spawn( move  || {
+    //     loop {
+    //         update_ranking(conn.clone()).await;
+    //         std::thread::sleep(std::time::Duration::new(60 * 60, 0));
+    //     }
+    // });
 
     let app_state = AppState { pool };
     actix_web::HttpServer::new(move || {
