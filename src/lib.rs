@@ -45,7 +45,7 @@ impl RawTeam {
             id: 0,
             rank: None,
             score: 0,
-            stage: 0,
+            stage: create_team.stage,
             name: create_team.name,
             logo_url: create_team.logo_url,
             banner_url: create_team.banner_url,
@@ -61,9 +61,16 @@ pub struct CreateTeam {
     pub name: String,
     pub description: String,
     pub location: String,
+    pub stage: i32,
     pub creation_date: String,
     pub banner_url: Option<String>,
     pub logo_url: Option<String>,
+}
+
+impl Default for Team {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Team {
@@ -155,7 +162,7 @@ impl Team {
             .fetch_all(&pool)
             .await
             .unwrap();
-        let persons:Vec<Person> = raw_persons.iter().map(|p| Person::from(&p)).collect();
+        let persons:Vec<Person> = raw_persons.iter().map(Person::from).collect();
         persons
     }
 }
@@ -179,6 +186,12 @@ pub struct CreatePerson {
     pub graduation_date: String,
     pub picture_url: Option<String>,
     pub portafolio_url: Option<String>,
+}
+
+impl Default for Person {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Person {
@@ -446,4 +459,78 @@ impl EditPerson {
         query.push_str(" WHERE id = $1");
         query
     }
+}
+
+#[derive(FromRow, Debug, Serialize)]
+pub struct BadgeID {
+    pub badge_id: i64,
+}
+
+#[derive(FromRow, Debug, Serialize)]
+pub struct BadgePoints {
+    pub points: i64,
+}
+
+pub async fn update_score(id: i64, pool: sqlx::postgres::PgPool) {
+    let badge_ids = sqlx::query_as::<sqlx::postgres::Postgres, BadgeID>("SELECT badge_id FROM badge_ownerships WHERE team_id = $1")
+                        .bind(id)
+                        .fetch_all(&pool.clone())
+                        .await
+                        .unwrap();
+    let badge_ids:Vec<i64> = badge_ids.iter().map(|badge_id| badge_id.badge_id).collect();
+    let badges = sqlx::query_as::<sqlx::postgres::Postgres, BadgePoints>("SELECT points FROM badges WHERE id = ANY($1)")
+                        .bind(&badge_ids)
+                        .fetch_all(&pool.clone())
+                        .await
+                        .unwrap();
+    let score:i64 = badges.iter().map(|points| points.points ).sum();
+    sqlx::query("UPDATE teams SET score = $1 WHERE id = $2")
+        .bind(score)
+        .bind(id)
+        .execute(&pool.clone())
+        .await
+        .unwrap();
+}
+
+#[derive(FromRow, Debug, Serialize)]
+pub struct RankTeam {
+    pub id: i64,
+    pub score: i64,
+    pub name: String,
+    pub rank: Option<i32>,
+}
+
+impl RankTeam {
+    pub async fn rank_db(&self, pool: sqlx::postgres::PgPool) {
+        sqlx::query("UPDATE teams SET rank = $1 WHERE id = $2")
+            .bind(self.rank)
+            .bind(self.id)
+            .execute(&pool.clone()).await.unwrap();
+    }
+}
+        
+
+pub async fn update_ranking(pool: sqlx::postgres::PgPool) {
+    let mut teams = sqlx::query_as::<sqlx::postgres::Postgres, RankTeam>("SELECT id, score, name, rank FROM teams")
+        .fetch_all(&pool.clone())
+        .await
+        .unwrap();
+    teams.sort_by(|a, b| {
+        if a.score == b.score { a.name.cmp(&b.name) }
+        else { b.score.cmp(&a.score) }
+    });
+    let (mut rank, mut score):(Option<i32>, i64) = (None, 0);
+    let mut futures = vec![];
+    for team in &mut teams {
+        if score != team.score { score = team.score; 
+            rank = match rank {
+                None => Some(1),
+                Some(rank) => Some(rank + 1),
+            };
+        }
+        if score == 0 { team.rank = None; }
+        else { team.rank = rank; }
+        futures.push(team.rank_db(pool.clone()));
+    }
+    futures::future::join_all(futures).await;
 }

@@ -14,10 +14,12 @@ async fn teams(db: web::Data<AppState>) -> impl Responder {
         let team =  Team::from(raw_team, &db.pool);
         teams.push(team);
     }
-    let teams = future::join_all(teams).await;
-
-    HttpResponse::Ok()
-        .append_header(("Access-Control-Allow-Origin", "*")).json(teams)
+    let mut teams = future::join_all(teams).await;
+    teams.sort_by(|a, b| {
+        if a.score == b.score { a.name.cmp(&b.name) }
+        else { b.score.cmp(&a.score) }
+    });
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json(teams)
 }
 
 #[get("/labels")]
@@ -71,22 +73,24 @@ async fn team_create(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respond
         Ok(raw_team) => raw_team,
         Err(err) => return HttpResponse::BadRequest()
         .append_header(("Access-Control-Allow-Origin", "*"))
-        .json(format!("ERROR PARSING JSON: {}", err.to_string())),
+        .json(format!("ERROR PARSING JSON: {}", err)),
     };
     let raw_team = RawTeam::from(raw_team);
 
-    if let Err(err) = sqlx::query("INSERT INTO teams (score, stage, name, description, creation_date, location) VALUES ($1, $2, $3, $4, $5, $6)")
+    if let Err(err) = sqlx::query("INSERT INTO teams (score, stage, name, description, creation_date, location, logo_url, banner_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
     .bind(raw_team.score)
     .bind(raw_team.stage)
     .bind(&raw_team.name)
     .bind(&raw_team.description)
-    .bind(&raw_team.creation_date)
+    .bind(raw_team.creation_date)
     .bind(&raw_team.location)
+    .bind(&raw_team.logo_url)
+    .bind(&raw_team.banner_url)
     .execute(&db.pool.clone())
     .await
     { return HttpResponse::BadRequest()        
         .append_header(("Access-Control-Allow-Origin", "*"))
-        .json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) 
+        .json(format!("ERROR ADDING TO DATABASE: {}", err)) 
 
     }
 
@@ -108,7 +112,7 @@ async fn add_label(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder
     let label_ownership = serde_json::from_str(&label_ownership);
     let label_ownership:CreateLabelOwnership = match label_ownership {
         Ok(label_ownership) => label_ownership,
-        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
+        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
     };
 
     if let Err(err) = sqlx::query("INSERT INTO label_ownerships (team_id, label_id) VALUES ($1, $2)")
@@ -116,7 +120,7 @@ async fn add_label(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder
     .bind(label_ownership.label_id)
     .execute(&db.pool.clone())
     .await
-    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 
@@ -126,7 +130,7 @@ async fn add_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder
     let badge_ownership = serde_json::from_str(&badge_ownership);
     let badge_ownership:CreateBadgeOwnership = match badge_ownership {
         Ok(badge_ownership) => badge_ownership,
-        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
+        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
     };
     
     let format = actix_web::cookie::time::format_description::parse("[year]-[month]-[day]").unwrap();
@@ -136,7 +140,8 @@ async fn add_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder
     .bind(actix_web::cookie::time::Date::parse(&badge_ownership.acquisition_date, &format).unwrap())
     .execute(&db.pool)
     .await
-    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }
+    update_score(badge_ownership.team_id, db.pool.clone()).await;
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 
@@ -146,7 +151,7 @@ async fn add_person(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responde
     let person = serde_json::from_str(&person);
     let person:CreatePerson = match person {
         Ok(person) => person,
-        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
+        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
     };
 
     let format = actix_web::cookie::time::format_description::parse("[year]-[month]-[day]").unwrap();
@@ -159,7 +164,7 @@ async fn add_person(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responde
     .bind(&person.portafolio_url)
     .execute(&db.pool)
     .await
-    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 
@@ -169,7 +174,7 @@ async fn create_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respon
     let badge = serde_json::from_str(&badge);
     let badge:CreateBadge = match badge {
         Ok(badge) => badge,
-        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
+        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
     };
 
     if let Err(err) = sqlx::query("INSERT INTO badges (name, description, points, category) VALUES ($1, $2, $3, $4)")
@@ -179,7 +184,7 @@ async fn create_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respon
     .bind(badge.category)
     .execute(&db.pool.clone())
     .await
-    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }
 
     let id:i64 = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM badges WHERE name = $1")
     .bind(&badge.name)
@@ -197,14 +202,14 @@ async fn create_label(db: web::Data<AppState>, bytes: web::Bytes) -> impl Respon
     let label = serde_json::from_str(&label);
     let label:CreateLabel = match label {
         Ok(label) => label,
-        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
+        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
     };
 
     if let Err(err) = sqlx::query("INSERT INTO labels (name) VALUES ($1)")
     .bind(&label.name)
     .execute(&db.pool.clone())
     .await
-    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }
 
     let id:i64 = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM labels WHERE name = $1")
     .bind(&label.name)
@@ -222,14 +227,14 @@ async fn create_category(db: web::Data<AppState>, bytes: web::Bytes) -> impl Res
     let category = serde_json::from_str(&category);
     let category:CreateCategory = match category {
         Ok(category) => category,
-        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
+        Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
     };
 
     if let Err(err) = sqlx::query("INSERT INTO badge_categories (name) VALUES ($1)")
     .bind(&category.name)
     .execute(&db.pool.clone())
     .await
-    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }
 
     let id:i64 = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM badge_categories WHERE name = $1")
     .bind(&category.name)
@@ -262,7 +267,7 @@ async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Re
     let id:i64 = match headers.get("id") {
         Some(id) => match String::from_utf8(id.as_bytes().to_vec()).unwrap().parse() {
             Ok(id) => id,
-            Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR WITH id: {}", err.to_string())),
+            Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR WITH id: {}", err)),
         }
         None => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("NO id FOUND"),
     };
@@ -329,7 +334,7 @@ async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Re
     .bind(id)
     .execute(&db.pool)
     .await
-    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 
@@ -340,7 +345,7 @@ async fn edit(db: web::Data<AppState>, req: actix_web::HttpRequest, bytes: web::
     let id:i64 = match headers.get("id") {
         Some(id) => match String::from_utf8(id.as_bytes().to_vec()).unwrap().parse() {
             Ok(id) => id,
-            Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR WITH id: {}", err.to_string())),
+            Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR WITH id: {}", err)),
         }
         None => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("NO id FOUND"),
     };
@@ -353,35 +358,35 @@ async fn edit(db: web::Data<AppState>, req: actix_web::HttpRequest, bytes: web::
         "category" => {
             let raw_json:EditCategory = match serde_json::from_str(&raw_json) {
                 Ok(raw_json) => raw_json,
-                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
+                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
             };
             raw_json.query()
         }
         "label" => {
             let raw_json:EditLabel = match serde_json::from_str(&raw_json) {
                 Ok(raw_json) => raw_json,
-                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
+                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
             };
             raw_json.query()
         },
         "badge" => {
             let raw_json:EditBadge = match serde_json::from_str(&raw_json) {
                 Ok(raw_json) => raw_json,
-                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
+                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
             };
             raw_json.query()
         },
         "person" => {
             let raw_json:EditPerson = match serde_json::from_str(&raw_json) {
                 Ok(raw_json) => raw_json,
-                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
+                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
             };
             raw_json.query()
         },
         "team" => {
             let raw_json:EditTeam = match serde_json::from_str(&raw_json) {
                 Ok(raw_json) => raw_json,
-                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err.to_string())),
+                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
             };
             raw_json.query()
         },
@@ -392,9 +397,29 @@ async fn edit(db: web::Data<AppState>, req: actix_web::HttpRequest, bytes: web::
         .bind(id)
         .execute(&db.pool)
         .await
-    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err.to_string())) }
+    { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }
 
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
+}
+
+// #[post("/update/scores")]
+// async fn update_scores(db: web::Data<AppState>) -> impl Responder {
+//     let ids = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM teams")
+//         .fetch_all(&(db.pool.clone()))
+//         .await
+//         .unwrap();
+//     let mut updates = vec![];
+//     for id in ids {
+//         updates.push(update_score(id.id, db.pool.clone()));
+//     }
+//     let future = future::join_all(updates).await;
+//     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json(future)
+// }
+
+#[post("update/rankings")]
+async fn update_rankings(db: web::Data<AppState>) -> impl Responder {
+    update_ranking(db.pool.clone()).await;
+    HttpResponse::Ok()
 }
 
 #[actix_web::main]
@@ -429,6 +454,8 @@ async fn main() -> std::io::Result<()> {
             .service(create_category)
             .service(delete)
             .service(edit)
+            // .service(update_scores)
+            .service(update_rankings)
     })
     .bind((host, port))?
     .run()

@@ -28,7 +28,7 @@ CREATE TABLE `labels`(
 --     `labels` ADD UNIQUE `labels_name_unique`(`name`);
 CREATE TABLE `teams`(
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    `rank` INT UNSIGNED NULL UNIQUE,
+    `rank` INT UNSIGNED NULL,
     `score` BIGINT UNSIGNED NOT NULL,
     `stage` INT UNSIGNED NOT NULL,
     `name` VARCHAR(255) NOT NULL UNIQUE,

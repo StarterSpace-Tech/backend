@@ -320,3 +320,8 @@ If any of the values in the `JSON`s are not set in them, they will be kept as is
 ```
 
 In return you will get a list of values that where successfully added and the ones that failed.
+
+## TODO
+
+- logo-url doesnt load
+- create team add stage

@@ -27,7 +27,7 @@ CREATE TABLE labels(
 --     labels ADD UNIQUE labels_name_unique(name);
 CREATE TABLE teams(
     id BIGSERIAL PRIMARY KEY,
-    rank INT NULL UNIQUE,
+    rank INT NULL,
     score BIGINT NOT NULL,
     stage INT NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
