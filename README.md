@@ -333,7 +333,7 @@ If `type` is `label` send a `JSON` `BODY`:
 ```json
 {
     "team_id": "int",
-    "label_id": "int",
+    "label_id": "int"
 }
 ```
 
@@ -341,7 +341,7 @@ If `type` is `badge` send a `JSON` `BODY`:
 ```json
 {
     "team_id": "int",
-    "badge_id": "int",
+    "badge_id": "int"
 }
 ```
 
