@@ -347,7 +347,7 @@ If `type` is `badge` send a `JSON` `BODY`:
 
 # POST /update/rankings
 
-Update teams ranking based on their scores.
+Update scores and rankings.
 
 ## TODO
 

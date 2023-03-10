@@ -142,6 +142,7 @@ async fn add_badge(db: web::Data<AppState>, bytes: web::Bytes) -> impl Responder
     .await
     { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }
     update_score(badge_ownership.team_id, db.pool.clone()).await;
+    update_ranking(db.pool.clone()).await;
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 
@@ -283,6 +284,7 @@ async fn delete_ownership(db: web::Data<AppState>, bytes: web::Bytes, req: actix
         .unwrap();
     if let "badge_id" = column {
         update_score(id, db.pool.clone()).await;
+        update_ranking(db.pool.clone()).await;
     }
 
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("OK")
@@ -327,7 +329,7 @@ async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Re
         // Delete badge ownerships
         "badge" => {
             if force { delete_secondaries("badge_ownerships", "badge_id", id, db.pool.clone()).await.unwrap(); }        
-            update_scores(&db.pool.clone()).await;
+            update_scores(db.pool.clone()).await;
             "badges"
         },
 
@@ -445,7 +447,7 @@ async fn edit(db: web::Data<AppState>, req: actix_web::HttpRequest, bytes: web::
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 
-async fn update_scores(pool: &sqlx::postgres::PgPool) {
+async fn update_scores(pool: sqlx::postgres::PgPool) {
     let ids = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM teams")
         .fetch_all(&pool.clone())
         .await
@@ -454,15 +456,16 @@ async fn update_scores(pool: &sqlx::postgres::PgPool) {
     for id in ids {
         updates.push(update_score(id.id, pool.clone()));
     }
+    update_ranking(pool.clone()).await;
     future::join_all(updates).await;
-}
 
+}
 #[post("update/rankings")]
 async fn update_rankings(db: web::Data<AppState>) -> impl Responder {
-    update_scores(&db.pool.clone()).await;
-    update_ranking(db.pool.clone()).await;
+    update_scores(db.pool.clone()).await;
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("OK")
 }
+
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -505,7 +508,6 @@ async fn main() -> std::io::Result<()> {
             .service(delete_ownership)
             .service(delete)
             .service(edit)
-            // .service(update_scores)
             .service(update_rankings)
     })
     .bind((host, port))?
