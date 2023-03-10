@@ -321,7 +321,34 @@ If any of the values in the `JSON`s are not set in them, they will be kept as is
 
 In return you will get a list of values that where successfully added and the ones that failed.
 
+# POST /delete\_ownership"
+
+Delete a link between between a team and a label or badge
+
+| HEADER | Content        |
+|--------|----------------|
+| type*  | type of object |
+
+If `type` is `label` send a `JSON` `BODY`:
+```json
+{
+    "team_id": "int",
+    "label_id": "int",
+}
+```
+
+If `type` is `badge` send a `JSON` `BODY`:
+```json
+{
+    "team_id": "int",
+    "badge_id": "int",
+}
+```
+
+# POST /update/rankings
+
+Update teams ranking based on their scores.
+
 ## TODO
 
-- logo-url doesnt load
-- create team add stage
+- loop to bind in edit

@@ -246,6 +246,48 @@ async fn create_category(db: web::Data<AppState>, bytes: web::Bytes) -> impl Res
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json(id)
 }
 
+#[post("/delete_ownership")]
+async fn delete_ownership(db: web::Data<AppState>, bytes: web::Bytes, req: actix_web::HttpRequest) -> impl Responder {
+    let headers = req.headers();
+    let taip = match headers.get("type") {
+        Some(taip) => String::from_utf8(taip.as_bytes().to_vec()).unwrap(),
+        None => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("NO type PASSED"),
+    };
+    let (tid, id, table, column) = match &taip[..] {
+        "label" => {
+            let label_ownership = String::from_utf8(bytes.to_vec()).unwrap();
+            let label_ownership = serde_json::from_str(&label_ownership);
+            let label_ownership:DeleteOwnedLabel = match label_ownership {
+                Ok(label_ownership) => label_ownership,
+                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
+            };
+            (label_ownership.team_id, label_ownership.label_id, "label_ownerships", "label_id")
+        },
+        "badge"=> {
+            let badge_ownership = String::from_utf8(bytes.to_vec()).unwrap();
+            let badge_ownership = serde_json::from_str(&badge_ownership);
+            let badge_ownership:DeleteOwnedBadge = match badge_ownership {
+                Ok(badge_ownership) => badge_ownership,
+                Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
+            };
+            (badge_ownership.team_id, badge_ownership.badge_id, "badge_ownerships", "badge_id")
+        },
+        _ => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("NO type FOUND")
+    };
+    let query = format!("DELETE FROM {} WHERE team_id = $1 AND {} = $2", table, column);
+    sqlx::query(&query)
+        .bind(tid)
+        .bind(id)
+        .execute(&db.pool.clone())
+        .await
+        .unwrap();
+    if let "badge_id" = column {
+        update_score(id, db.pool.clone()).await;
+    }
+
+    HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("OK")
+}
+
 async fn delete_secondaries(table: &str, field: &str, id: i64, pool: sqlx::postgres::PgPool) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
     let query = format!("DELETE FROM {} WHERE {} = $1", table, field);
 
@@ -285,6 +327,7 @@ async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Re
         // Delete badge ownerships
         "badge" => {
             if force { delete_secondaries("badge_ownerships", "badge_id", id, db.pool.clone()).await.unwrap(); }        
+            update_scores(&db.pool.clone()).await;
             "badges"
         },
 
@@ -402,22 +445,21 @@ async fn edit(db: web::Data<AppState>, req: actix_web::HttpRequest, bytes: web::
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 
-// #[post("/update/scores")]
-// async fn update_scores(db: web::Data<AppState>) -> impl Responder {
-//     let ids = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM teams")
-//         .fetch_all(&(db.pool.clone()))
-//         .await
-//         .unwrap();
-//     let mut updates = vec![];
-//     for id in ids {
-//         updates.push(update_score(id.id, db.pool.clone()));
-//     }
-//     let future = future::join_all(updates).await;
-//     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json(future)
-// }
+async fn update_scores(pool: &sqlx::postgres::PgPool) {
+    let ids = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM teams")
+        .fetch_all(&pool.clone())
+        .await
+        .unwrap();
+    let mut updates = vec![];
+    for id in ids {
+        updates.push(update_score(id.id, pool.clone()));
+    }
+    future::join_all(updates).await;
+}
 
 #[post("update/rankings")]
 async fn update_rankings(db: web::Data<AppState>) -> impl Responder {
+    update_scores(&db.pool.clone()).await;
     update_ranking(db.pool.clone()).await;
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("OK")
 }
@@ -460,6 +502,7 @@ async fn main() -> std::io::Result<()> {
             .service(create_badge)
             .service(create_label)
             .service(create_category)
+            .service(delete_ownership)
             .service(delete)
             .service(edit)
             // .service(update_scores)

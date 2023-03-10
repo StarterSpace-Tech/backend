@@ -298,6 +298,12 @@ pub struct BadgeOwnership {
     pub acquisition_date: actix_web::cookie::time::Date,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct DeleteOwnedBadge {
+    pub team_id: i64,
+    pub badge_id: i64,
+}
+
 #[derive(Serialize, Debug)]
 pub struct OwnedBadge {
     id: i64,
@@ -325,6 +331,12 @@ pub struct CreateLabelOwnership {
 #[derive(FromRow, Debug)]
 pub struct LabelOwnership {
     pub id: i64,
+    pub team_id: i64,
+    pub label_id: i64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct DeleteOwnedLabel {
     pub team_id: i64,
     pub label_id: i64,
 }
