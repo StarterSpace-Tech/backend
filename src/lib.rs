@@ -546,3 +546,15 @@ pub async fn update_ranking(pool: sqlx::postgres::PgPool) {
     }
     futures::future::join_all(futures).await;
 }
+
+#[derive(Deserialize)]
+pub struct DeleteQuery {
+    pub kind: String,
+    pub id: i64,
+    pub force: Option<bool>,
+}
+
+#[derive(Deserialize)]
+pub struct DeleteOwnershipQuery {
+    pub kind: String,
+}

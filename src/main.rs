@@ -248,13 +248,8 @@ async fn create_category(db: web::Data<AppState>, bytes: web::Bytes) -> impl Res
 }
 
 #[post("/delete_ownership")]
-async fn delete_ownership(db: web::Data<AppState>, bytes: web::Bytes, req: actix_web::HttpRequest) -> impl Responder {
-    let headers = req.headers();
-    let taip = match headers.get("type") {
-        Some(taip) => String::from_utf8(taip.as_bytes().to_vec()).unwrap(),
-        None => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("NO type PASSED"),
-    };
-    let (tid, id, table, column) = match &taip[..] {
+async fn delete_ownership(db: web::Data<AppState>, bytes: web::Bytes,  info: web::Query<DeleteOwnershipQuery>) -> impl Responder {
+    let (tid, id, table, column) = match &info.kind[..] {
         "label" => {
             let label_ownership = String::from_utf8(bytes.to_vec()).unwrap();
             let label_ownership = serde_json::from_str(&label_ownership);
@@ -300,35 +295,18 @@ async fn delete_secondaries(table: &str, field: &str, id: i64, pool: sqlx::postg
 }
 
 #[post("/delete")]
-async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Responder {
-    let headers = req.headers();
-    let force = match headers.get("force"){
-        Some(value) if value.as_bytes() == "true".as_bytes() => true,
-        Some(value) if value.as_bytes() == "false".as_bytes() => false,
-        Some(_) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("UNEXPECTED VALUE FOR force"),
-        None => false,
-    };
-    let id:i64 = match headers.get("id") {
-        Some(id) => match String::from_utf8(id.as_bytes().to_vec()).unwrap().parse() {
-            Ok(id) => id,
-            Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR WITH id: {}", err)),
-        }
-        None => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("NO id FOUND"),
-    };
-    let taip = match headers.get("type") {
-        Some(taip) => String::from_utf8(taip.as_bytes().to_vec()).unwrap(),
-        None => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("NO type FOUND"),
-    };
-    let query = format!("DELETE FROM {} WHERE id = $1", match &taip[..] {
+async fn delete(db: web::Data<AppState>, info: web::Query<DeleteQuery>) -> impl Responder {
+    let force = info.force.unwrap_or(false);
+    let query = format!("DELETE FROM {} WHERE id = $1", match &info.kind[..] {
         // Delete label ownerships
         "label" => {
-            if force { delete_secondaries("label_ownerships", "label_id", id, db.pool.clone()).await.unwrap(); }        
+            if force { delete_secondaries("label_ownerships", "label_id", info.id, db.pool.clone()).await.unwrap(); }        
             "labels"
         },
 
         // Delete badge ownerships
         "badge" => {
-            if force { delete_secondaries("badge_ownerships", "badge_id", id, db.pool.clone()).await.unwrap(); }        
+            if force { delete_secondaries("badge_ownerships", "badge_id", info.id, db.pool.clone()).await.unwrap(); }        
             update_scores(db.pool.clone()).await;
             "badges"
         },
@@ -337,7 +315,7 @@ async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Re
         "category" => {
             if force {
                 let badge_ids = sqlx::query_as::<sqlx::postgres::Postgres, RawID>("SELECT id FROM badges WHERE category = $1")
-                    .bind(id)
+                    .bind(info.id)
                     .fetch_all(&db.pool.clone())
                     .await
                     .unwrap();
@@ -348,7 +326,7 @@ async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Re
                     .await
                     .unwrap();
                 sqlx::query("DELETE FROM badges WHERE id = $1")
-                    .bind(id)
+                    .bind(info.id)
                     .execute(&db.pool.clone())
                     .await
                     .unwrap();
@@ -362,9 +340,9 @@ async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Re
         "team" => {
             if force {
                 let links = vec![
-                    delete_secondaries("label_ownerships", "team_id", id, db.pool.clone()),
-                    delete_secondaries("badge_ownerships", "team_id", id, db.pool.clone()),
-                    delete_secondaries("persons", "team_id", id, db.pool.clone()),
+                    delete_secondaries("label_ownerships", "team_id", info.id, db.pool.clone()),
+                    delete_secondaries("badge_ownerships", "team_id", info.id, db.pool.clone()),
+                    delete_secondaries("persons", "team_id", info.id, db.pool.clone()),
                 ];
                 let links = future::join_all(links).await;
                 for res in  links {
@@ -376,7 +354,7 @@ async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Re
         _ => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("TYPE IS NOT AVAILABLE FOR DELETION"),
     });
     if let Err(err) = sqlx::query(&query)
-    .bind(id)
+    .bind(info.id)
     .execute(&db.pool)
     .await
     { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }
@@ -384,22 +362,9 @@ async fn delete(db: web::Data<AppState>, req: actix_web::HttpRequest) -> impl Re
 }
 
 #[post("/edit")]
-async fn edit(db: web::Data<AppState>, req: actix_web::HttpRequest, bytes: web::Bytes) -> impl Responder {
+async fn edit(db: web::Data<AppState>, info: web::Query<DeleteQuery>, bytes: web::Bytes) -> impl Responder {
     let raw_json = String::from_utf8(bytes.to_vec()).unwrap();
-    let headers = req.headers();
-    let id:i64 = match headers.get("id") {
-        Some(id) => match String::from_utf8(id.as_bytes().to_vec()).unwrap().parse() {
-            Ok(id) => id,
-            Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR WITH id: {}", err)),
-        }
-        None => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("NO id FOUND"),
-    };
-    let taip = match headers.get("type") {
-        Some(taip) => String::from_utf8(taip.as_bytes().to_vec()).unwrap(),
-        None => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("NO type FOUND"),
-    };
-
-    let query = match &taip[..] {
+    let query = match &info.kind[..] {
         "category" => {
             let raw_json:EditCategory = match serde_json::from_str(&raw_json) {
                 Ok(raw_json) => raw_json,
@@ -439,7 +404,7 @@ async fn edit(db: web::Data<AppState>, req: actix_web::HttpRequest, bytes: web::
     };
 
     if let Err(err) = sqlx::query(&query)
-        .bind(id)
+        .bind(info.id)
         .execute(&db.pool)
         .await
     { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }

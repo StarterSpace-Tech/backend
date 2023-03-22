@@ -253,26 +253,26 @@ This method returns the category's `id`.
 
 ## POST /delete
 
-| HEADER | Content         |
-|--------|-----------------|
-| type*  | type of object  |
-| id*    | id of object    |
-| force  | (false default) |
+| PARAM | Content         |
+|-------|-----------------|
+| kind* | type of object  |
+| id*   | id of object    |
+| force | (false default) |
 
-`type` $\in$ { `label`, `badge`, `person`, `category`, `person`, `team` }
+`kind` $\in$ { `label`, `badge`, `person`, `category`, `team` }
 
 `force` can be `true` or `false`. If it is `true`, any object with a link to that object will also be deleted.
 
 ## POST /edit
 
-| HEADER | Content        |
-|--------|----------------|
-| type*  | type of object |
-| id*    | id of object   |
+| PARAM | Content        |
+|-------|----------------|
+| kind* | type of object |
+| id*   | id of object   |
 
 If any of the values in the `JSON`s are not set in them, they will be kept as is. If you wish to set a nullable value to `null`, pass in `"null"` as the value.
 
-### type == label
+### kind == label
 
 ```json
 {
@@ -280,7 +280,7 @@ If any of the values in the `JSON`s are not set in them, they will be kept as is
 }
 ```
 
-### type == badge
+### kind == badge
 
 ```json
 {
@@ -292,7 +292,7 @@ If any of the values in the `JSON`s are not set in them, they will be kept as is
 ```
 
 
-### type == person
+### kind == person
 
 ```json
 {
@@ -305,7 +305,7 @@ If any of the values in the `JSON`s are not set in them, they will be kept as is
 }
 ```
 
-### type == team
+### kind == team
 
 ```json
 {
@@ -325,11 +325,11 @@ In return you will get a list of values that where successfully added and the on
 
 Delete a link between between a team and a label or badge
 
-| HEADER | Content        |
-|--------|----------------|
-| type*  | type of object |
+| PARAM | Content        |
+|-------|----------------|
+| kind* | type of object |
 
-If `type` is `label` send a `JSON` `BODY`:
+If `kind` is `label` send a `JSON` `BODY`:
 ```json
 {
     "team_id": "int",
@@ -337,7 +337,7 @@ If `type` is `label` send a `JSON` `BODY`:
 }
 ```
 
-If `type` is `badge` send a `JSON` `BODY`:
+If `kind` is `badge` send a `JSON` `BODY`:
 ```json
 {
     "team_id": "int",
