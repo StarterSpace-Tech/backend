@@ -321,7 +321,7 @@ If any of the values in the `JSON`s are not set in them, they will be kept as is
 
 In return you will get a list of values that where successfully added and the ones that failed.
 
-# POST /delete\_ownership"
+# POST /delete\_ownership
 
 Delete a link between between a team and a label or badge
 
@@ -333,7 +333,7 @@ If `kind` is `label` send a `JSON` `BODY`:
 ```json
 {
     "team_id": "int",
-    "label_id": "int",
+    "label_id": "int"
 }
 ```
 
@@ -341,7 +341,7 @@ If `kind` is `badge` send a `JSON` `BODY`:
 ```json
 {
     "team_id": "int",
-    "badge_id": "int",
+    "badge_id": "int"
 }
 ```
 
