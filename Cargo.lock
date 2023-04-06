@@ -1477,7 +1477,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "start-backend"
+name = "starterspace-backend"
 version = "0.1.0"
 dependencies = [
  "actix-cors",

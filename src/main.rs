@@ -1,5 +1,5 @@
 use actix_web::{get, post, web, HttpResponse, Responder};
-use start_backend::*;
+use starterspace_backend::*;
 use futures::*;
 
 #[get("/teams")]
@@ -358,8 +358,8 @@ async fn delete(db: web::Data<AppState>, info: web::Query<DeleteQuery>) -> impl 
     .bind(info.id)
     .execute(&db.pool)
     .await
-    update_ranking(db.pool.clone()).await;
     { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }
+    update_ranking(db.pool.clone()).await;
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 
@@ -413,7 +413,7 @@ async fn edit(db: web::Data<AppState>, info: web::Query<DeleteQuery>, bytes: web
         .execute(&db.pool)
         .await
     { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }
-    if(reload){
+    if reload {
         update_scores(db.pool.clone()).await;
         update_ranking(db.pool.clone()).await;
     }
