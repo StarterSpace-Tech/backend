@@ -1,5 +1,5 @@
 use actix_web::{get, post, web, HttpResponse, Responder};
-use star_tec_backend::*;
+use start_backend::*;
 use futures::*;
 
 #[get("/teams")]
@@ -278,7 +278,7 @@ async fn delete_ownership(db: web::Data<AppState>, bytes: web::Bytes,  info: web
         .await
         .unwrap();
     if let "badge_id" = column {
-        update_score(id, db.pool.clone()).await;
+        update_score(tid, db.pool.clone()).await;
         update_ranking(db.pool.clone()).await;
     }
 
@@ -325,11 +325,12 @@ async fn delete(db: web::Data<AppState>, info: web::Query<DeleteQuery>) -> impl 
                     .execute(&db.pool.clone())
                     .await
                     .unwrap();
-                sqlx::query("DELETE FROM badges WHERE id = $1")
+                sqlx::query("DELETE FROM badges WHERE category = $1")
                     .bind(info.id)
                     .execute(&db.pool.clone())
                     .await
                     .unwrap();
+                update_scores(db.pool.clone()).await;
             }
             "badge_categories"
         },
@@ -357,12 +358,14 @@ async fn delete(db: web::Data<AppState>, info: web::Query<DeleteQuery>) -> impl 
     .bind(info.id)
     .execute(&db.pool)
     .await
+    update_ranking(db.pool.clone()).await;
     { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 
 #[post("/edit")]
 async fn edit(db: web::Data<AppState>, info: web::Query<DeleteQuery>, bytes: web::Bytes) -> impl Responder {
+    let mut reload = false;
     let raw_json = String::from_utf8(bytes.to_vec()).unwrap();
     let query = match &info.kind[..] {
         "category" => {
@@ -384,6 +387,7 @@ async fn edit(db: web::Data<AppState>, info: web::Query<DeleteQuery>, bytes: web
                 Ok(raw_json) => raw_json,
                 Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
             };
+            reload = true;
             raw_json.query()
         },
         "person" => {
@@ -398,6 +402,7 @@ async fn edit(db: web::Data<AppState>, info: web::Query<DeleteQuery>, bytes: web
                 Ok(raw_json) => raw_json,
                 Err(err) => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR PARSING JSON: {}", err)),
             };
+            reload = true;
             raw_json.query()
         },
         _ => return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json("TYPE IS NOT AVAILABLE FOR DELETION"),
@@ -408,7 +413,10 @@ async fn edit(db: web::Data<AppState>, info: web::Query<DeleteQuery>, bytes: web
         .execute(&db.pool)
         .await
     { return HttpResponse::BadRequest().append_header(("Access-Control-Allow-Origin", "*")).json(format!("ERROR ADDING TO DATABASE: {}", err)) }
-
+    if(reload){
+        update_scores(db.pool.clone()).await;
+        update_ranking(db.pool.clone()).await;
+    }
     HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).json("Success")
 }
 

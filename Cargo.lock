@@ -1477,7 +1477,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "star-tec-backend"
+name = "start-backend"
 version = "0.1.0"
 dependencies = [
  "actix-cors",

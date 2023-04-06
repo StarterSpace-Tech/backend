@@ -280,6 +280,14 @@ If any of the values in the `JSON`s are not set in them, they will be kept as is
 }
 ```
 
+### kind == category
+
+```json
+{
+	"name": "string?",
+}
+```
+
 ### kind == badge
 
 ```json
@@ -351,4 +359,5 @@ Update scores and rankings.
 
 ## TODO
 
-- loop to bind in edit
+- add edit cateogory to documentation
+- comment code
